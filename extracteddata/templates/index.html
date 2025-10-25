@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}PoxSearchDB{% endblock %}
+{% block extra_head %}
+<style>
+	/* Front-page four-feature layout */
+	.features-section { padding: 3rem 0; }
+	.feature-card { text-align: center; padding: 1rem; }
+	.feature-circle {
+		width: 120px;
+		height: 120px;
+		border-radius: 50%;
+		background: #f5f5f8;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: 0 auto 1rem auto;
+		overflow: hidden;
+		box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+	}
+	.feature-circle img { max-width: 80%; max-height: 80%; display:block; }
+	/* specific smaller size for the Studies icon */
+	.feature-circle img.feature-icon--small {
+		width: 60%;
+		height: auto;
+	}
+	.feature-title { margin-top: .5rem; font-weight: 600; }
+	@media (max-width: 576px) {
+		.feature-circle { width: 100px; height: 100px; }
+	}
+
+	/* Landing-page host map preview */
+	.home-host-map-wrapper {
+		position: relative;
+		border-radius: 12px;
+		overflow: hidden;
+		box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+	}
+	.home-host-map-wrapper iframe {
+		height: 380px;
+		width: 100%;
+		filter: grayscale(0.15) saturate(0.9);
+		pointer-events: none; /* Make preview non-interactive */
+		user-select: none;
+		border: none;
+	}
+	.home-host-map__status {
+		position: absolute;
+		top: 12px;
+		left: 12px;
+		background: rgba(255,255,255,0.92);
+		padding: 8px 12px;
+		border-radius: 8px;
+		font-size: 0.9rem;
+		box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+	}
+	.home-host-map__veil {
+		position: absolute;
+		bottom: 12px;
+		right: 12px;
+		background: rgba(0,0,0,0.65);
+		color: #fff;
+		padding: 6px 10px;
+		border-radius: 6px;
+		font-size: 0.85rem;
+		letter-spacing: 0.02em;
+	}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container features-section">
+	<div class="row justify-content-center">
+
+		<div class="col-6 col-sm-3 feature-card">
+			<div class="feature-circle">
+				<img class="feature-icon feature-icon--small" src="{% static 'img/documents-search-icon.svg' %}" alt="Studies" />
+			</div>
+			<div class="feature-title">Studies</div>
+			<div class="feature-count text-muted">{{ descriptive_count|default:0 }}</div>
+		</div>
+
+		<div class="col-6 col-sm-3 feature-card">
+			<div class="feature-circle">
+				<img src="{% static 'img/mouse-rat-icon.svg' %}" alt="Hosts" />
+			</div>
+			<div class="feature-title">Hosts</div>
+			<div class="feature-count text-muted">{{ host_count|default:0 }}</div>
+		</div>
+
+		<div class="col-6 col-sm-3 feature-card">
+			<div class="feature-circle">
+				<img src="{% static 'img/bacteria-bacterial-germs-icon.svg' %}" alt="Pathogens" />
+			</div>
+			<div class="feature-title">Pathogens</div>
+			<div class="feature-count text-muted">{{ pathogen_count|default:0 }}</div>
+		</div>
+
+		<div class="col-6 col-sm-3 feature-card">
+			<div class="feature-circle">
+				<img src="{% static 'img/dna-science-icon.svg' %}" alt="Sequences" />
+			</div>
+			<div class="feature-title">Sequences</div>
+			<div class="feature-count text-muted">{{ sequence_count|default:0 }}</div>
+		</div>
+
+	</div>
+</div>
+
+<div class="container my-4">
+	<div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3">
+		<div>
+			<h5 class="mb-1">Host map preview</h5>
+			<div class="text-muted small">Static preview &mdash; open the full map for interactivity.</div>
+		</div>
+		<a class="btn btn-primary btn-sm mt-2 mt-md-0" href="{% url 'map' %}">Open full map</a>
+	</div>
+	<div class="home-host-map-wrapper">
+		{% if host_map %}
+			{{ host_map|safe }}
+		{% else %}
+			<div class="home-host-map__status">No host data available</div>
+		{% endif %}
+		<div class="home-host-map__veil">Preview only</div>
+	</div>
+</div>
+
+{% endblock %}

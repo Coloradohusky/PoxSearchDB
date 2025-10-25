@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Host Distribution Map{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="padding: 0;">
+    <div id="map" style="height: 100vh; width: 100%;"></div>
+    
+    <div id="loading-indicator" style="position: absolute; top: 10px; right: 10px; background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); z-index: 1000;">
+        <strong>Loading map data...</strong>
+        <div id="progress"></div>
+    </div>
+</div>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<style>
+    /* Customize marker clusters for better performance */
+    .marker-cluster-small {
+        background-color: rgba(181, 226, 140, 0.6);
+    }
+    .marker-cluster-small div {
+        background-color: rgba(110, 204, 57, 0.6);
+    }
+    .marker-cluster-medium {
+        background-color: rgba(241, 211, 87, 0.6);
+    }
+    .marker-cluster-medium div {
+        background-color: rgba(240, 194, 12, 0.6);
+    }
+    .marker-cluster-large {
+        background-color: rgba(253, 156, 115, 0.6);
+    }
+    .marker-cluster-large div {
+        background-color: rgba(241, 128, 23, 0.6);
+    }
+    
+    /* Custom popup styling */
+    .leaflet-popup-content {
+        margin: 8px;
+        font-size: 13px;
+    }
+    .leaflet-popup-content strong {
+        color: #333;
+    }
+</style>
+
+<script>
+// Map configuration from Django settings (Python-defined)
+const mapConfig = {{ map_config|safe }};
+const dataEndpoint = "{{ data_endpoint }}";
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize map with Python-defined configuration
+    const map = L.map('map', {
+        center: mapConfig.center,
+        zoom: mapConfig.zoom,
+        minZoom: mapConfig.minZoom,
+        maxZoom: mapConfig.maxZoom,
+        preferCanvas: true  // Critical for performance with 100k+ points
+    });
+
+    // Add base tile layers from Python configuration
+    const tileLayers = {};
+    let firstLayer = null;
+    
+    mapConfig.tiles.forEach((tileConfig, index) => {
+        const layer = L.tileLayer(tileConfig.url, {
+            attribution: tileConfig.attribution,
+            maxZoom: tileConfig.maxZoom
+        });
+        
+        tileLayers[tileConfig.name] = layer;
+        
+        // Add first layer as default
+        if (index === 0) {
+            firstLayer = layer;
+            layer.addTo(map);
+        }
+    });
+
+    // Add layer control
+    L.control.layers(tileLayers).addTo(map);
+
+    // Create marker cluster group with Python-defined options
+    const markers = L.markerClusterGroup(mapConfig.clusterOptions);
+
+    // Load GeoJSON data
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const progressDiv = document.getElementById('progress');
+    
+    fetch(dataEndpoint)
+        .then(response => response.json())
+        .then(data => {
+            console.log(`Loading ${data.features.length} host locations...`);
+            progressDiv.textContent = `Loaded ${data.features.length} hosts`;
+            
+            // Create GeoJSON layer with Python-defined marker styling
+            const geojsonLayer = L.geoJSON(data, {
+                pointToLayer: function(feature, latlng) {
+                    // Use marker style from Python configuration
+                    return L.circleMarker(latlng, mapConfig.markerStyle);
+                },
+                onEachFeature: function(feature, layer) {
+                    // Add popup with host information
+                    const props = feature.properties;
+                    layer.bindPopup(`
+                        <div style="min-width: 180px;">
+                            <strong>Species:</strong> ${props.name}<br>
+                            <strong>Country:</strong> ${props.country}<br>
+                            <strong>Count:</strong> ${props.count}<br>
+                            <strong>Date:</strong> ${props.date}<br>
+                            <a href="/host/${props.id}/" target="_blank" style="color: #0066cc;">View Details</a>
+                        </div>
+                    `);
+                }
+            });
+            
+            // Add to cluster group
+            markers.addLayer(geojsonLayer);
+            map.addLayer(markers);
+            
+            // Hide loading indicator
+            setTimeout(() => {
+                loadingIndicator.style.display = 'none';
+            }, 1000);
+            
+            console.log('Map rendering complete');
+        })
+        .catch(error => {
+            console.error('Error loading host data:', error);
+            progressDiv.innerHTML = '<span style="color: red;">Error loading data</span>';
+        });
+});
+</script>
+{% endblock %}

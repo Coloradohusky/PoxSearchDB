@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Full Text {{ fulltext.id }}{% endblock %}
+{% block content %}
+<div class="container mt-3">
+  <h2>Full Text: {{ fulltext.title }}</h2>
+  {% if request.user.is_staff %}
+    <p><strong>ID:</strong> <a href="/admin/extracteddata/fulltext/{{ fulltext.id }}/change/">{{ fulltext.id }}</a></p>
+    {% if fulltext.original_id %}
+      <p><strong>Original ID:</strong> {{ fulltext.original_id }}</p>
+    {% endif %}
+  {% endif %}
+  <p><strong>Author:</strong> {{ fulltext.author }}</p>
+  <p><strong>Publication Year:</strong> {{ fulltext.publication_year }}</p>
+  <p><strong>Processed:</strong> {{ fulltext.processed }}</p>
+  <h4>Decision & Reason</h4>
+  <p><strong>Decision:</strong> {{ fulltext.decision }}</p>
+  <p><strong>Reason:</strong> {{ fulltext.reason }}</p>
+
+  <h4>Associated Descriptives</h4>
+  {% if descriptives %}
+    <ul>
+      {% for d in descriptives %}
+        <li><a href="{% url 'descriptive_detail' d.id %}">Descriptive {{ d.id }}: {{ d.dataset_name }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No descriptive records linked.</p>
+  {% endif %}
+
+</div>
+{% endblock %}

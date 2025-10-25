@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+{% block title %}Pathogen Search{% endblock %}
+{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <style>
+    .filter-container { background: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
+    .filter-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .filter-group { flex: 1; min-width: 200px; }
+    .filter-group label { display: block; font-weight: bold; margin-bottom: 5px; }
+    .filter-group input, .filter-group select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+    .btn-group { margin-top: 10px; }
+    .column-toggle { background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    .column-toggle-header { font-weight: bold; margin-bottom: 10px; cursor: pointer; }
+    .column-toggle-content { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+    .column-toggle-content.show { max-height: 500px; overflow-y: auto; }
+    .column-checkbox { display: flex; align-items: center; gap: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Pathogen Search</h1>
+
+  <!-- Advanced Filters -->
+  <div class="filter-container">
+    <h4>Filters</h4>
+    <div class="filter-row">
+      <div class="filter-group">
+        <label for="filterFamily">Family</label>
+        <input type="text" id="filterFamily" placeholder="Enter family">
+      </div>
+      <div class="filter-group">
+        <label for="filterCountry">Country</label>
+        <input type="text" id="filterCountry" placeholder="Enter country">
+      </div>
+      <div class="filter-group">
+        <label for="filterYearFrom">Year From</label>
+        <input type="number" id="filterYearFrom" placeholder="e.g. 2000">
+      </div>
+      <div class="filter-group">
+        <label for="filterYearTo">Year To</label>
+        <input type="number" id="filterYearTo" placeholder="e.g. 2024">
+      </div>
+    </div>
+    <div class="btn-group">
+      <button id="applyFilters" class="btn btn-primary">Apply Filters</button>
+      <button id="clearFilters" class="btn btn-secondary">Clear Filters</button>
+      <button id="exportData" class="btn btn-success">Export to CSV</button>
+    </div>
+  </div>
+
+  <!-- Column Visibility Toggle -->
+  <div class="column-toggle">
+    <div class="column-toggle-header" id="toggleColumnsBtn">▶ Show/Hide Columns</div>
+    <div class="column-toggle-content" id="columnToggles"><!-- populated by JS --></div>
+  </div>
+
+  <!-- DataTable -->
+  <table id="unifiedTable" class="display" style="width:100%">
+    <thead>
+      <tr><!-- header built by JS --></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+  $(document).ready(function() {
+    let table = null;
+    let allColumns = [];
+
+    const defaultColumns = [ 'id','family','assay','tested','host__scientific_name','host__study__full_text__title' ];
+
+    function getActiveFilters() {
+      const params = {};
+      if (table) {
+        const searchValue = table.search(); if (searchValue) params.search = searchValue;
+        const order = table.order(); if (order && order.length > 0) {
+          const orderColumnIndex = order[0][0]; const orderDir = order[0][1];
+          const columnData = table.settings()[0].aoColumns[orderColumnIndex].data;
+          params.ordering = (orderDir === 'asc' ? '' : '-') + columnData;
+        }
+      }
+      const family = $('#filterFamily').val(); const country = $('#filterCountry').val();
+      const yearFrom = $('#filterYearFrom').val(); const yearTo = $('#filterYearTo').val();
+      if (family) params.family = family; if (country) params.country = country;
+      if (yearFrom) params.year_from = yearFrom; if (yearTo) params.year_to = yearTo;
+      return params;
+    }
+
+    function initializeTable() {
+      const saved = localStorage.getItem('visibleColumns');
+      const visibleColumns = saved ? JSON.parse(saved) : defaultColumns;
+      console.debug('[initializeTable] visibleColumns=', visibleColumns, 'allColumns=', allColumns.length);
+
+      const columnsConfig = allColumns.map(col => ({
+        data: col.data, title: col.title, defaultContent: '-', orderable: true,
+        visible: visibleColumns.includes(col.data),
+        render: function(data, type, row) {
+          try {
+            if (col.data === 'host__study__full_text__title') {
+              var ft_id = row['host__study__full_text__id'] || row['host__study__full_text__pk'] || '';
+              if (ft_id) return '<a href="/fulltext/' + ft_id + '/">' + (data || '') + '</a>';
+              return data;
+            }
+            if (col.data === 'id' || col.data.endsWith('__id') || col.data.endsWith('__pk')) {
+              var idKey = col.data; var idVal = row[idKey];
+              if (!idVal) { idKey = idKey.replace(/__pk$/, '__id'); idVal = row[idKey]; }
+              if (idVal) {
+                if (col.data.startsWith('host__study__full_text__') || idKey.startsWith('host__study__full_text__')) return '<a href="/fulltext/' + idVal + '/">' + (data || '') + '</a>';
+                if (col.data.startsWith('host__study__') || idKey.startsWith('host__study__')) return '<a href="/descriptive/' + idVal + '/">' + (data || '') + '</a>';
+                if (col.data.startsWith('host__') || idKey.startsWith('host__')) return '<a href="/host/' + idVal + '/">' + (data || '') + '</a>';
+                if (col.data.startsWith('pathogen__') || idKey.startsWith('pathogen__')) return '<a href="/pathogen/' + idVal + '/">' + (data || '') + '</a>';
+                if (col.data.startsWith('sequence__') || idKey.startsWith('sequence__')) return '<a href="/sequence/' + idVal + '/">' + (data || '') + '</a>';
+                if (col.data === 'id') return '<a href="/pathogen/' + idVal + '/">' + (data || '') + '</a>';
+              }
+            }
+          } catch (e) { console.error('render error for column', col, e); }
+          return data;
+        }
+      }));
+
+      if (table) { try { table.destroy(true); } catch (e) { console.warn('destroy err', e); } $('#unifiedTable').empty(); }
+
+      const headerHtml = allColumns.map(c => '<th>' + c.title + '</th>').join('');
+      $('#unifiedTable').html('<thead><tr>' + headerHtml + '</tr></thead><tbody></tbody>');
+
+      try {
+        console.debug('[initializeTable] creating DataTable with', columnsConfig.length, 'columns');
+        table = $('#unifiedTable').DataTable({
+          destroy: true,
+          ajax: {
+            url: '/api/unified/',
+            data: function(d) {
+              console.debug('[DataTable ajax.data] params', d);
+              const params = { limit: d.length, offset: d.start };
+              if (d.search && d.search.value) params.search = d.search.value;
+              if (d.order && d.order.length > 0) { const orderColumn = d.columns[d.order[0].column]; const orderDir = d.order[0].dir === 'asc' ? '' : '-'; params.ordering = orderDir + orderColumn.data; }
+              const extra = getActiveFilters(); Object.assign(params, extra);
+              return params;
+            },
+            dataSrc: function(json) { console.debug('[DataTable dataSrc] got', json); if (!json || !json.results) { console.error('Invalid response', json); return []; } json.recordsTotal = json.count || 0; json.recordsFiltered = json.count || 0; return json.results; },
+            error: function(xhr, error, code) { console.error('DataTables Ajax error', error, code, xhr && xhr.responseText); }
+          },
+          columns: columnsConfig,
+          processing: true,
+          serverSide: true,
+          paging: true,
+          searching: true,
+          ordering: true,
+          pageLength: 100,
+          scrollX: true,
+          deferRender: true,
+          searchDelay: 500,
+          stateSave: false
+        });
+      } catch (err) { console.error('DataTable init error', err); }
+    }
+
+    function populateColumnToggles() {
+      const saved = localStorage.getItem('visibleColumns');
+      const visibleColumns = saved ? JSON.parse(saved) : defaultColumns;
+      const togglesHtml = allColumns.map(col => '<div class="column-checkbox">' + '<input type="checkbox" id="col_' + col.data.replace(/[^a-zA-Z0-9]/g, '_') + '" value="' + col.data + '"' + (visibleColumns.includes(col.data) ? ' checked' : '') + '>' + '<label for="col_' + col.data.replace(/[^a-zA-Z0-9]/g, '_') + '">' + col.title + '</label></div>').join('');
+      $('#columnToggles').html(togglesHtml);
+
+      $('#columnToggles').off('change', 'input[type="checkbox"]').on('change', 'input[type="checkbox"]', function() {
+        const checked = $('#columnToggles input[type="checkbox"]:checked').map(function() { return $(this).val(); }).get();
+        if (checked.length === 0) { alert('Please select at least one column'); $(this).prop('checked', true); return; }
+        localStorage.setItem('visibleColumns', JSON.stringify(checked));
+        if (table) {
+          const toggled = $(this).val(); const colIndex = allColumns.findIndex(c => c.data === toggled);
+          if (colIndex >= 0) { const show = $(this).is(':checked'); try { table.column(colIndex).visible(show, false); table.columns.adjust().draw(false); } catch (e) { console.error('toggle visible err', e); initializeTable(); } }
+          else { initializeTable(); }
+        } else { initializeTable(); }
+      });
+    }
+
+    $.ajax({ url: '/api/unified/columns/', success: function(resp) { allColumns = resp.columns || []; initializeTable(); populateColumnToggles(); }, error: function() { console.error('failed to load columns'); allColumns = [{data:'id',title:'ID'},{data:'family',title:'Family'}]; initializeTable(); populateColumnToggles(); } });
+
+    $('#toggleColumnsBtn').click(function() { $('#columnToggles').toggleClass('show'); $(this).text($(this).text().includes('▶') ? '▼ Show/Hide Columns' : '▶ Show/Hide Columns'); });
+    $('#applyFilters').click(function() { if (table) table.ajax.reload(null, false); });
+    $('#clearFilters').click(function() { $('#filterFamily,#filterCountry,#filterYearFrom,#filterYearTo').val(''); if (table) { table.search('').draw(); } });
+    $('#exportData').click(function() { const filters = getActiveFilters(); const saved = localStorage.getItem('visibleColumns'); const visibleColumns = saved ? JSON.parse(saved) : defaultColumns; const params = new URLSearchParams(); for (const [k,v] of Object.entries(filters)) if (v) params.append(k,v); if (visibleColumns && visibleColumns.length) params.append('columns', visibleColumns.join(',')); const orig = $(this).text(); $(this).text('Exporting...').prop('disabled',true); window.location.href = '/api/unified/export/?' + params.toString(); setTimeout(()=>$(this).text(orig).prop('disabled',false),2000); });
+    $('.filter-group input').keypress(function(e){ if (e.which===13) $('#applyFilters').click(); });
+  });
+  </script>
+</body>
+</html>
+{% endblock %}

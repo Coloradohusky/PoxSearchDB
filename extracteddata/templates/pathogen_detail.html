@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Pathogen {{ pathogen.id }}{% endblock %}
+{% block content %}
+<div class="container mt-3">
+  <h2>Pathogen: {{ pathogen.scientific_name }}</h2>
+  {% if request.user.is_staff %}
+    <p><strong>ID:</strong> <a href="/admin/extracteddata/pathogen/{{ pathogen.id }}/change/">{{ pathogen.id }}</a></p>
+    {% if pathogen.original_id %}
+      <p><strong>Original ID:</strong> {{ pathogen.original_id }}</p>
+    {% endif %}
+  {% endif %}
+  <p><strong>Family:</strong> {{ pathogen.family }}</p>
+  <p><strong>Assay:</strong> {{ pathogen.assay }}</p>
+  <p><strong>Tested:</strong> {{ pathogen.tested }}</p>
+  <p><strong>Positive:</strong> {{ pathogen.positive }}</p>
+  <p><strong>Negative:</strong> {{ pathogen.negative }}</p>
+  <p><strong>Note:</strong> {{ pathogen.note }}</p>
+
+  <h4>Host</h4>
+  {% if pathogen.host %}
+    <p><a href="{% url 'host_detail' pathogen.host.id %}">{{ pathogen.host.scientific_name }} ({{ pathogen.host.locality }})</a></p>
+  {% endif %}
+
+  <h4>Sequences</h4>
+  {% if sequences %}
+    <ul>
+      {% for s in sequences %}
+        <li>
+          <a href="{% url 'sequence_detail' s.id %}">Sequence {{ s.id }}</a>
+          {% if s.accession_number %}
+            — <a href="https://www.ncbi.nlm.nih.gov/nuccore/{{ s.accession_number }}" target="_blank" rel="noopener noreferrer">{{ s.accession_number }}</a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No sequences.</p>
+  {% endif %}
+</div>
+{% endblock %}

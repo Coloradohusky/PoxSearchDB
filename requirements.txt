@@ -1,0 +1,16 @@
+django==5.2.7
+django-leaflet
+djangorestframework
+openpyxl
+numpy
+pandas
+python-decouple
+gunicorn
+whitenoise
+psycopg[binary,pool]
+GDAL==3.10.2
+dj-database-url
+pygbif>=0.6.6
+vcrpy>=8.1.0
+folium
+xyzservices

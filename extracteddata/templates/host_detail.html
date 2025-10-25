@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Host {{ host.id }}{% endblock %}
+{% block content %}
+<div class="container mt-3">
+  <h2>Host: {{ host.scientific_name }}</h2>
+  {% if request.user.is_staff %}
+    <p><strong>ID:</strong> <a href="/admin/extracteddata/host/{{ host.id }}/change/">{{ host.id }}</a></p>
+    {% if host.original_id %}
+      <p><strong>Original ID:</strong> {{ host.original_id }}</p>
+    {% endif %}
+  {% endif %}
+  <p><strong>Locality:</strong> {{ host.locality }}</p>
+  <p><strong>Country:</strong> {{ host.country }}</p>
+  <p><strong>Latitude:</strong> {{ host.location_latitude }}</p>
+  <p><strong>Longitude:</strong> {{ host.location_longitude }}</p>
+  <p><strong>Individual Count:</strong> {{ host.individual_count }}</p>
+
+  <h4>Study / Descriptive</h4>
+  {% if host.study %}
+    <p><a href="{% url 'descriptive_detail' host.study.id %}">Descriptive {{ host.study.id }}: {{ host.study.dataset_name }}</a></p>
+    {% if host.study.full_text %}
+      <p><a href="{% url 'fulltext_detail' host.study.full_text.id %}">Full Text {{ host.study.full_text.id }}: {{ host.study.full_text.title }}</a></p>
+    {% endif %}
+  {% endif %}
+
+  <h4>Pathogens</h4>
+  {% if pathogens %}
+    <ul>
+      {% for p in pathogens %}
+        <li><a href="{% url 'pathogen_detail' p.id %}">{{ p.scientific_name }} ({{ p.family }})</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No pathogen records.</p>
+  {% endif %}
+
+  <h4>Sequences</h4>
+  {% if sequences %}
+    <ul>
+      {% for s in sequences %}
+        <li>
+          <a href="{% url 'sequence_detail' s.id %}">Sequence {{ s.id }}</a>
+          {% if s.accession_number %}
+            — <a href="https://www.ncbi.nlm.nih.gov/nuccore/{{ s.accession_number }}" target="_blank" rel="noopener noreferrer">{{ s.accession_number }}</a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No sequence records for this host.</p>
+  {% endif %}
+</div>
+{% endblock %}

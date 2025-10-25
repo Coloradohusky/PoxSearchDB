@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Descriptive {{ descriptive.id }}{% endblock %}
+{% block content %}
+<div class="container mt-3">
+  <h2>Descriptive: {{ descriptive.dataset_name }}</h2>
+  {% if request.user.is_staff %}
+    <p><strong>ID:</strong> <a href="/admin/extracteddata/descriptive/{{ descriptive.id }}/change/">{{ descriptive.id }}</a></p>
+    {% if descriptive.original_id %}
+      <p><strong>Original ID:</strong> {{ descriptive.original_id }}</p>
+    {% endif %}
+  {% endif %}
+  <p><strong>Dataset Name:</strong> {{ descriptive.dataset_name }}</p>
+  <p><strong>Sampling Effort:</strong> {{ descriptive.sampling_effort }}</p>
+  <p><strong>Data Access:</strong> {{ descriptive.data_access }}</p>
+  <p><strong>Data Resolution:</strong> {{ descriptive.data_resolution }}</p>
+  <p><strong>Linked Manuscripts:</strong> {{ descriptive.linked_manuscripts }}</p>
+  <p><strong>Notes:</strong> {{ descriptive.notes }}</p>
+
+  <h4>Source Full Text</h4>
+  {% if descriptive.full_text %}
+    <p><a href="{% url 'fulltext_detail' descriptive.full_text.id %}">Full Text {{ descriptive.full_text.id }}: {{ descriptive.full_text.title }}</a></p>
+  {% else %}
+    <p>No linked full text.</p>
+  {% endif %}
+
+  <h4>Host Records</h4>
+  {% if hosts %}
+    <ul>
+      {% for h in hosts %}
+        <li><a href="{% url 'host_detail' h.id %}">{{ h.scientific_name }} ({{ h.locality }})</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No hosts.</p>
+  {% endif %}
+
+  <h4>Sequences</h4>
+  {% if sequences %}
+    <ul>
+      {% for s in sequences %}
+        <li>
+          <a href="{% url 'sequence_detail' s.id %}">Sequence {{ s.id }}</a>
+          {% if s.accession_number %}
+            — <a href="https://www.ncbi.nlm.nih.gov/nuccore/{{ s.accession_number }}" target="_blank" rel="noopener noreferrer">{{ s.accession_number }}</a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No sequences for this descriptive record.</p>
+  {% endif %}
+
+</div>
+{% endblock %}

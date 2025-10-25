@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}Upload Data{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Upload Data</h2>
+    <form id="upload-form" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <div class="form-group">
+            <label>Select File Type:</label>
+            {{ form.file_type }}
+        </div>
+
+        <div class="form-group">
+            <label>
+                {{ form.log_verbose }}
+                Enable verbose logging
+            </label>
+        </div>
+
+        <div id="csv-section" style="display:none;">
+            <h4>CSV Files (one per model type)</h4>
+            <p>All files are required.</p>
+            <div class="form-group">Full Text:<br>{{ form.inclusion_full_text }}</div>
+            <div class="form-group">Description:<br>{{ form.descriptive }}</div>
+            <div class="form-group">Host:<br>{{ form.host }}</div>
+            <div class="form-group">Pathogen:<br>{{ form.pathogen }}</div>
+            <div class="form-group">Sequences:<br>{{ form.sequences }}</div>
+        </div>
+
+        <div id="excel-section" style="display:none;">
+            <h4>Excel File (all data in one file)</h4>
+            <div class="form-group">{{ form.excel_file }}</div>
+        </div>
+
+        <button id="submit-button" type="submit" class="btn btn-primary" style="display:none;">Upload</button>
+    </form>
+
+    <!-- Live Log Output -->
+    <div class="mt-4">
+        <h4>Processing Logs</h4>
+        <pre id="log-output" style="background:#000; color:#0f0; padding:10px; height:300px; overflow-y:scroll; font-family:monospace;"></pre>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csvSection = document.getElementById('csv-section');
+    const excelSection = document.getElementById('excel-section');
+    const submitButton = document.getElementById('submit-button');
+    const radios = document.querySelectorAll('input[name="file_type"]');
+    const logOutput = document.getElementById('log-output');
+    const form = document.getElementById('upload-form');
+
+    function toggleSections() {
+        const selected = document.querySelector('input[name="file_type"]:checked')?.value;
+        csvSection.style.display = selected === 'csv' ? 'block' : 'none';
+        excelSection.style.display = selected === 'excel' ? 'block' : 'none';
+        submitButton.style.display = 'block';
+    }
+
+    radios.forEach(r => r.addEventListener('change', toggleSections));
+    toggleSections();
+
+    // Stream logs live when form is submitted
+    form.addEventListener('submit', function(e) {
+        e.preventDefault(); // prevent normal submit
+
+        // Clear previous logs
+        logOutput.textContent = "Starting upload...\n";
+
+        // Send form via fetch
+        fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form)
+        }).then(response => {
+            if (!response.body) {
+                logOutput.textContent += "Error: No response stream.\n";
+                return;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            function readStream() {
+                reader.read().then(({ done, value }) => {
+                    if (done) {
+                        logOutput.textContent += "\nUpload process completed.\n";
+                        return;
+                    }
+                    logOutput.textContent += decoder.decode(value, { stream: true });
+                    logOutput.scrollTop = logOutput.scrollHeight; // auto-scroll
+                    readStream();
+                }).catch(error => {
+                    logOutput.textContent += "\nError reading stream: " + error + "\n";
+                });
+            }
+
+            readStream();
+        }).catch(error => {
+            logOutput.textContent += "\nError during upload: " + error + "\n";
+        });
+    });
+});
+</script>
+{% endblock %}

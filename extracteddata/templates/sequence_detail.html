@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Sequence{% if request.user.is_staff %} {{ sequence.id }}{% endif %}{% endblock %}
+{% block content %}
+<div class="container mt-3">
+  <h2>Sequence{% if request.user.is_staff %} {{ sequence.id }}{% endif %}</h2>
+  {% if request.user.is_staff %}
+    <p><strong>ID:</strong> <a href="/admin/extracteddata/sequence/{{ sequence.id }}/change/">{{ sequence.id }}</a></p>
+    {% if sequence.original_id %}
+      <p><strong>Original ID:</strong> {{ sequence.original_id }}</p>
+    {% endif %}
+  {% endif %}
+  <p><strong>Accession Number:</strong>
+    {% if sequence.accession_number %}
+      <a href="https://www.ncbi.nlm.nih.gov/nuccore/{{ sequence.accession_number }}" target="_blank" rel="noopener noreferrer">{{ sequence.accession_number }}</a>
+    {% else %}
+      N/A
+    {% endif %}
+  </p>
+  <p><strong>Type:</strong> {{ sequence.sequence_type }}</p>
+  <p><strong>Method:</strong> {{ sequence.method }}</p>
+  <p><strong>Date Sampled:</strong> {{ sequence.date_sampled }}</p>
+  <p><strong>Sample Location:</strong> {{ sequence.sample_location }}</p>
+  <p><strong>Note:</strong> {{ sequence.note }}</p>
+
+  <h4>Related Records</h4>
+  {% if sequence.pathogen %}
+    <p>Pathogen: <a href="{% url 'pathogen_detail' sequence.pathogen.id %}">{{ sequence.pathogen.scientific_name }}</a></p>
+  {% endif %}
+  {% if sequence.host %}
+    <p>Host: <a href="{% url 'host_detail' sequence.host.id %}">{{ sequence.host.scientific_name }}</a></p>
+  {% endif %}
+  {% if sequence.study %}
+    <p>Study/Descriptive: <a href="{% url 'descriptive_detail' sequence.study.id %}">{{ sequence.study.dataset_name }}</a></p>
+  {% endif %}
+</div>
+{% endblock %}
