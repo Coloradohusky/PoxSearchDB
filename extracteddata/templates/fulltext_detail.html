@@ -3,6 +3,7 @@
 {% block content %}
 <div class="container mt-3">
   <h2>Full Text: {{ fulltext.title }}</h2>
+  <p><strong>Search on:</strong> <a href="https://pubmed.ncbi.nlm.nih.gov/?term={{ fulltext.title|urlencode }}">PubMed</a></p>
   {% if request.user.is_staff %}
     <p><strong>ID:</strong> <a href="/admin/extracteddata/fulltext/{{ fulltext.id }}/change/">{{ fulltext.id }}</a></p>
     {% if fulltext.original_id %}
