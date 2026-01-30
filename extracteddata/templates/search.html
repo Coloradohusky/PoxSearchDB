@@ -224,10 +224,12 @@
     $('#clearFilters').click(function() { 
       $('#filterFamily,#filterCountry,#filterYearFrom,#filterYearTo').val(''); 
       if (table) { 
-        table.search('').draw(); 
-      } 
-      // Update URL after table state is updated
-      setTimeout(function() { updateURLParams(); }, 0);
+        table.search('');
+      }
+      updateURLParams();
+      if (table) {
+        table.ajax.reload(null, false);
+      }
     });
     $('#exportData').click(function() { const filters = getActiveFilters(); const saved = localStorage.getItem('visibleColumns'); const visibleColumns = saved ? JSON.parse(saved) : defaultColumns; const params = new URLSearchParams(); for (const [k,v] of Object.entries(filters)) if (v) params.append(k,v); if (visibleColumns && visibleColumns.length) params.append('columns', visibleColumns.join(',')); const orig = $(this).text(); $(this).text('Exporting...').prop('disabled',true); window.location.href = '/api/unified/export/?' + params.toString(); setTimeout(()=>$(this).text(orig).prop('disabled',false),2000); });
     $('.filter-group input').keypress(function(e){ if (e.which===13) $('#applyFilters').click(); });
