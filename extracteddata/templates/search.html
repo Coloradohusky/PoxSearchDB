@@ -70,6 +70,26 @@
 
     const defaultColumns = [ 'id','family','assay','tested','host__scientific_name','host__study__full_text__title' ];
 
+    function getUrlParams() {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        family: params.get('family') || '',
+        country: params.get('country') || '',
+        year_from: params.get('year_from') || '',
+        year_to: params.get('year_to') || '',
+        search: params.get('search') || ''
+      };
+    }
+
+    function updateUrlParams(params) {
+      const url = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (value) url.set(key, value);
+      }
+      const newUrl = window.location.pathname + (url.toString() ? '?' + url.toString() : '');
+      window.history.pushState({}, '', newUrl);
+    }
+
     function getActiveFilters() {
       const params = {};
       if (table) {
@@ -174,11 +194,11 @@
       });
     }
 
-    $.ajax({ url: '/api/unified/columns/', success: function(resp) { allColumns = resp.columns || []; initializeTable(); populateColumnToggles(); }, error: function() { console.error('failed to load columns'); allColumns = [{data:'id',title:'ID'},{data:'family',title:'Family'}]; initializeTable(); populateColumnToggles(); } });
+    $.ajax({ url: '/api/unified/columns/', success: function(resp) { allColumns = resp.columns || []; initializeTable(); populateColumnToggles(); const urlParams = getUrlParams(); $('#filterFamily').val(urlParams.family); $('#filterCountry').val(urlParams.country); $('#filterYearFrom').val(urlParams.year_from); $('#filterYearTo').val(urlParams.year_to); if (urlParams.search && table) table.search(urlParams.search).draw(); }, error: function() { console.error('failed to load columns'); allColumns = [{data:'id',title:'ID'},{data:'family',title:'Family'}]; initializeTable(); populateColumnToggles(); } });
 
     $('#toggleColumnsBtn').click(function() { $('#columnToggles').toggleClass('show'); $(this).text($(this).text().includes('▶') ? '▼ Show/Hide Columns' : '▶ Show/Hide Columns'); });
-    $('#applyFilters').click(function() { if (table) table.ajax.reload(null, false); });
-    $('#clearFilters').click(function() { $('#filterFamily,#filterCountry,#filterYearFrom,#filterYearTo').val(''); if (table) { table.search('').draw(); } });
+    $('#applyFilters').click(function() { const filters = getActiveFilters(); updateUrlParams(filters); if (table) table.ajax.reload(null, false); });
+    $('#clearFilters').click(function() { $('#filterFamily,#filterCountry,#filterYearFrom,#filterYearTo').val(''); if (table) { table.search('').draw(); } updateUrlParams({}); });
     $('#exportData').click(function() { const filters = getActiveFilters(); const saved = localStorage.getItem('visibleColumns'); const visibleColumns = saved ? JSON.parse(saved) : defaultColumns; const params = new URLSearchParams(); for (const [k,v] of Object.entries(filters)) if (v) params.append(k,v); if (visibleColumns && visibleColumns.length) params.append('columns', visibleColumns.join(',')); const orig = $(this).text(); $(this).text('Exporting...').prop('disabled',true); window.location.href = '/api/unified/export/?' + params.toString(); setTimeout(()=>$(this).text(orig).prop('disabled',false),2000); });
     $('.filter-group input').keypress(function(e){ if (e.which===13) $('#applyFilters').click(); });
   });

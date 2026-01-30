@@ -399,10 +399,20 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
             return JsonResponse({"columns": []})
             
         sample_data = self.get_serializer(sample_obj).data
-        columns = [
-            {"data": key, "title": key.replace('__', ' > ').replace('_', ' ').title()}
-            for key in sample_data.keys()
-        ]
+        columns = []
+        for key in sample_data.keys():
+            # Generate base title
+            title = key.replace('__', ' > ').replace('_', ' ').title()
+            
+            # Add "Host" prefix for host model's id and original_id fields
+            # E.g., "host__id" should become "Host > Host Id" not just "Host > Id"
+            if key == 'host__id':
+                title = 'Host > Host Id'
+            elif key == 'host__original_id':
+                title = 'Host > Host Original Id'
+            
+            columns.append({"data": key, "title": title})
+        
         return JsonResponse({"columns": columns})
 
     @action(detail=False, methods=["get"])
