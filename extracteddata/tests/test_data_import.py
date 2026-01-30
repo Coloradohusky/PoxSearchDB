@@ -219,11 +219,12 @@ class SequenceModelTests(SimpleTestCase):
 
 
 class ExcelImportTests(TestCase):
-    """Integration test: build an in-memory Excel file with one row each
+    """
+    Integration test: build an in-memory Excel file with one row each
     for FullText, Descriptive, Host, and Pathogen, then run the
     Excel handler to import them and verify DB objects and id_mapping.
+    Also tests duplicate import handling.
     """
-
     @my_vcr.use_cassette('gbif_excel_import.yaml')
     def test_import_from_excel(self):
         # Use a previously-created Excel file `test.xlsx` placed next to this test file.
@@ -245,14 +246,14 @@ class ExcelImportTests(TestCase):
         self.assertIsNotNone(logs)
         # Verify FullText created and mapped
         ft = models.FullText.objects.all()
-        self.assertEqual(ft.count(), 2)
+        self.assertEqual(ft.count(), 3)
         ft = models.FullText.objects.filter(title='Comparative analysis of rodent and small mammal viromes to better understand the wildlife origin of emerging infectious diseases.').first()
         self.assertIsNotNone(ft)
         self.assertIn('ft_1', id_mapping['inclusion_full_text'])
 
         # Verify Descriptive created and mapped
         desc = models.Descriptive.objects.all()
-        self.assertEqual(desc.count(), 1)
+        self.assertEqual(desc.count(), 2)
         desc = models.Descriptive.objects.filter(dataset_name='Pygmy rice rat as potential host of Castelo dos Sonhos Hantavirus.').first()
         self.assertIsNotNone(desc)
         self.assertIn('ds_348', id_mapping['descriptive'])
@@ -270,3 +271,30 @@ class ExcelImportTests(TestCase):
         self.assertIn('60632', id_mapping['pathogen'])
         self.assertIsNotNone(path.host)
         self.assertEqual(path.host.id, host.id)
+        
+        # Verify Sequence created, mapped, and linked to Host
+        seqc = models.Sequence.objects.filter(accession_number='MW174777').first()
+        self.assertIsNotNone(seqc)
+        self.assertIn('1006', id_mapping['sequence'])
+        self.assertIsNotNone(seqc.pathogen)
+        path = models.Pathogen.objects.filter(scientific_name='Wenzhou virus').first()
+        self.assertEqual(seqc.pathogen.id, path.id)
+        
+        # Test duplication handling
+        with open(test_xlsx_path, 'rb') as fh:
+            logs = list(di.handle_excel_upload(fh, id_mapping, verbose=True))
+        
+        ft = models.FullText.objects.all()
+        self.assertEqual(ft.count(), 3)
+
+        desc = models.Descriptive.objects.all()
+        self.assertEqual(desc.count(), 2)
+
+        host = models.Host.objects.all()
+        self.assertEqual(host.count(), 2)
+        
+        path = models.Pathogen.objects.all()
+        self.assertEqual(path.count(), 2)
+        
+        seqc = models.Sequence.objects.all()
+        self.assertEqual(seqc.count(), 1)

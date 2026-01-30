@@ -201,7 +201,7 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 # Leaflet Map Configuration
 LEAFLET_CONFIG = {
     'DEFAULT_CENTER': (20.0, 0.0),
-    'DEFAULT_ZOOM': 2,
+    'DEFAULT_ZOOM': 3,
     'MIN_ZOOM': 2,
     'MAX_ZOOM': 18,
     'TILE_PROVIDERS': {
