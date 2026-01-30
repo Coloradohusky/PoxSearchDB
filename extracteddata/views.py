@@ -312,7 +312,11 @@ def sequence_detail(request, pk):
     sequence = get_object_or_404(Sequence, pk=pk)
     return render(request, 'sequence_detail.html', {'sequence': sequence})
 
-def _build_search_query(search_value, model, max_depth=3):
+def _build_search_query(search_value, model, max_depth=2):
+    """
+    Build a search query that searches across all text fields in a model.
+    Note: max_depth is 2 to match _get_filterable_fields for consistency.
+    """
     def get_searchable_fields(model, prefix='', depth=0):
         if depth > max_depth:
             return []
@@ -338,8 +342,9 @@ def _build_search_query(search_value, model, max_depth=3):
                         depth + 1
                     )
                     fields.extend(related_fields)
-                except:
-                    pass  # Skip if there's an issue with the related model
+                except Exception as e:
+                    # Skip if there's an issue with the related model
+                    print(f"Could not traverse related field {field_name}: {e}", file=sys.stderr)
 
         return fields
 
@@ -447,8 +452,9 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
                     for related_field in field.related_model._meta.get_fields():
                         if not (related_field.one_to_many or related_field.many_to_many):
                             add_field(related_field, f"{field_name}__", depth + 1)
-                except:
-                    pass
+                except Exception as e:
+                    # Skip if there's an issue with the related model
+                    print(f"Could not traverse related field {field_name}: {e}", file=sys.stderr)
         
         # Process all model fields
         for field in model._meta.get_fields():
@@ -469,13 +475,10 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
         elif filter_type == 'exact':
             # Handle boolean conversion
             if field_config['type'] == 'boolean':
-                bool_value = value.lower() in ('true', '1', 'yes')
+                bool_value = value.lower() in ('true', '1', 'yes', 't', 'y')
                 return queryset.filter(**{field_name: bool_value})
             return queryset.filter(**{field_name: value})
-        elif filter_type == 'range':
-            # Range filters use __gte and __lte suffixes
-            # Handled separately in get_queryset
-            pass
+        # Note: range filters are handled in get_queryset() via _from and _to suffixes
         
         return queryset
 
@@ -484,7 +487,12 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
         
         # Get the selected model (default to pathogen for backwards compatibility)
         model_name = params.get('model', 'pathogen').lower()
-        config = self.MODEL_CONFIG.get(model_name, self.MODEL_CONFIG['pathogen'])
+        
+        # Validate model name
+        if model_name not in self.MODEL_CONFIG:
+            model_name = 'pathogen'  # Fallback to default
+        
+        config = self.MODEL_CONFIG[model_name]
         
         # Get the model class and build queryset
         model_class = config['model']
@@ -512,32 +520,36 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
                 if from_value:
                     try:
                         queryset = queryset.filter(**{f"{field_name}__gte": from_value})
-                    except:
-                        pass
+                    except (ValueError, TypeError) as e:
+                        # Invalid value for range filter, skip it
+                        print(f"Invalid range filter value for {field_name}_from: {e}", file=sys.stderr)
                 
                 # Check for _to suffix
                 to_value = params.get(f"{field_name}_to")
                 if to_value:
                     try:
                         queryset = queryset.filter(**{f"{field_name}__lte": to_value})
-                    except:
-                        pass
+                    except (ValueError, TypeError) as e:
+                        # Invalid value for range filter, skip it
+                        print(f"Invalid range filter value for {field_name}_to: {e}", file=sys.stderr)
             else:
                 # Handle direct filters
                 param_value = params.get(field_name)
                 if param_value:
                     try:
                         queryset = self._apply_filter(queryset, field_config, param_value)
-                    except:
-                        pass
+                    except (ValueError, TypeError) as e:
+                        # Invalid filter value, skip it
+                        print(f"Invalid filter value for {field_name}: {e}", file=sys.stderr)
         
         # Handle ordering
         ordering = params.get('ordering')
         if ordering:
             try:
                 queryset = queryset.order_by(ordering)
-            except:
-                pass  # Ignore invalid ordering fields
+            except Exception as e:
+                # Invalid ordering field, skip it
+                print(f"Invalid ordering field {ordering}: {e}", file=sys.stderr)
             
         return queryset
 

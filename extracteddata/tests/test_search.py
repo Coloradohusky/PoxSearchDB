@@ -14,9 +14,8 @@ class UnifiedViewSetTestCase(APITestCase):
     @classmethod
     def setUpTestData(cls):
         """Create test data for all models."""
-        # Create FullText
+        # Create FullText (let Django auto-generate ID)
         cls.fulltext = FullText.objects.create(
-            id=1,
             original_id='ft_001',
             title='Test Publication About Monkeypox',
             author='John Doe',
@@ -26,7 +25,6 @@ class UnifiedViewSetTestCase(APITestCase):
         
         # Create Descriptive
         cls.descriptive = Descriptive.objects.create(
-            id=1,
             original_id='ds_001',
             full_text=cls.fulltext,
             dataset_name='Test Dataset',
@@ -35,7 +33,6 @@ class UnifiedViewSetTestCase(APITestCase):
         
         # Create Host
         cls.host = Host.objects.create(
-            id=1,
             original_id='h_001',
             study=cls.descriptive,
             scientific_name='Mus musculus',
@@ -48,7 +45,6 @@ class UnifiedViewSetTestCase(APITestCase):
         
         # Create Pathogen
         cls.pathogen = Pathogen.objects.create(
-            id=1,
             original_id='p_001',
             host=cls.host,
             family='Poxviridae',
@@ -61,7 +57,6 @@ class UnifiedViewSetTestCase(APITestCase):
         
         # Create Sequence
         cls.sequence = Sequence.objects.create(
-            id=1,
             original_id='s_001',
             scientific_name='Monkeypox virus',
             sequence_type='Pathogen',

@@ -87,8 +87,14 @@
           currentFilters = resp.filters || [];
           if (callback) callback();
         },
-        error: function() {
-          console.error('Failed to load filters');
+        error: function(xhr, status, error) {
+          console.error('Failed to load filters:', error);
+          // Show user-visible error message
+          $('#dynamicFilters').html(
+            '<div class="alert alert-warning" role="alert">' +
+            '<strong>Warning:</strong> Could not load filters. Please refresh the page or try again later.' +
+            '</div>'
+          );
           currentFilters = [];
           if (callback) callback();
         }
@@ -102,11 +108,12 @@
       }
 
       // Limit to most relevant fields (avoid overwhelming UI)
+      const MAX_VISIBLE_FILTERS = 8;
       const relevantFilters = currentFilters.filter(f => {
         // Include only top-level fields and first-level related fields
         const depth = (f.name.match(/__/g) || []).length;
         return depth <= 1;
-      }).slice(0, 8); // Limit to 8 filters max
+      }).slice(0, MAX_VISIBLE_FILTERS);
 
       const html = relevantFilters.map(f => {
         const id = 'filter_' + f.name.replace(/[^a-zA-Z0-9]/g, '_');
@@ -338,8 +345,10 @@
           initializeTable(); 
           populateColumnToggles(); 
         }, 
-        error: function() { 
-          console.error('failed to load columns'); 
+        error: function(xhr, status, error) { 
+          console.error('Failed to load columns:', error);
+          // Show user-visible error message
+          alert('Warning: Could not load table columns. Using minimal fallback. Please refresh the page.');
           allColumns = [{data:'id',title:'ID'}]; 
           initializeTable(); 
           populateColumnToggles(); 
