@@ -221,7 +221,14 @@
 
     $('#toggleColumnsBtn').click(function() { $('#columnToggles').toggleClass('show'); $(this).text($(this).text().includes('▶') ? '▼ Show/Hide Columns' : '▶ Show/Hide Columns'); });
     $('#applyFilters').click(function() { updateURLParams(); if (table) table.ajax.reload(null, false); });
-    $('#clearFilters').click(function() { $('#filterFamily,#filterCountry,#filterYearFrom,#filterYearTo').val(''); if (table) { table.search('').draw(); } updateURLParams(); });
+    $('#clearFilters').click(function() { 
+      $('#filterFamily,#filterCountry,#filterYearFrom,#filterYearTo').val(''); 
+      if (table) { 
+        table.search('').draw(); 
+      } 
+      // Update URL after table state is updated
+      setTimeout(function() { updateURLParams(); }, 0);
+    });
     $('#exportData').click(function() { const filters = getActiveFilters(); const saved = localStorage.getItem('visibleColumns'); const visibleColumns = saved ? JSON.parse(saved) : defaultColumns; const params = new URLSearchParams(); for (const [k,v] of Object.entries(filters)) if (v) params.append(k,v); if (visibleColumns && visibleColumns.length) params.append('columns', visibleColumns.join(',')); const orig = $(this).text(); $(this).text('Exporting...').prop('disabled',true); window.location.href = '/api/unified/export/?' + params.toString(); setTimeout(()=>$(this).text(orig).prop('disabled',false),2000); });
     $('.filter-group input').keypress(function(e){ if (e.which===13) $('#applyFilters').click(); });
     
@@ -229,7 +236,7 @@
     window.addEventListener('popstate', function() {
       const searchValue = loadFiltersFromURL();
       if (table) {
-        if (searchValue) table.search(searchValue);
+        table.search(searchValue || '');
         table.ajax.reload(null, false);
       }
     });
