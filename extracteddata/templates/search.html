@@ -68,7 +68,41 @@
     let table = null;
     let allColumns = [];
 
-    const defaultColumns = [ 'id','family','assay','tested','host__scientific_name','host__study__full_text__title' ];
+    const defaultColumns = [ 'family','assay','tested','host__scientific_name','host__study__full_text__title' ];
+
+    function updateURLParams() {
+      const params = new URLSearchParams();
+      const family = $('#filterFamily').val();
+      const country = $('#filterCountry').val();
+      const yearFrom = $('#filterYearFrom').val();
+      const yearTo = $('#filterYearTo').val();
+      const searchValue = table ? table.search() : '';
+      
+      if (family) params.set('family', family);
+      if (country) params.set('country', country);
+      if (yearFrom) params.set('year_from', yearFrom);
+      if (yearTo) params.set('year_to', yearTo);
+      if (searchValue) params.set('search', searchValue);
+      
+      const newURL = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+      window.history.pushState({}, '', newURL);
+    }
+
+    function loadFiltersFromURL() {
+      const params = new URLSearchParams(window.location.search);
+      const family = params.get('family');
+      const country = params.get('country');
+      const yearFrom = params.get('year_from');
+      const yearTo = params.get('year_to');
+      const searchValue = params.get('search');
+      
+      if (family) $('#filterFamily').val(family);
+      if (country) $('#filterCountry').val(country);
+      if (yearFrom) $('#filterYearFrom').val(yearFrom);
+      if (yearTo) $('#filterYearTo').val(yearTo);
+      
+      return searchValue;
+    }
 
     function getActiveFilters() {
       const params = {};
@@ -91,6 +125,9 @@
       const saved = localStorage.getItem('visibleColumns');
       const visibleColumns = saved ? JSON.parse(saved) : defaultColumns;
       console.debug('[initializeTable] visibleColumns=', visibleColumns, 'allColumns=', allColumns.length);
+      
+      // Load filters from URL
+      const searchFromURL = loadFiltersFromURL();
 
       const columnsConfig = allColumns.map(col => ({
         data: col.data, title: col.title, defaultContent: '-', orderable: true,
@@ -151,7 +188,8 @@
           scrollX: true,
           deferRender: true,
           searchDelay: 500,
-          stateSave: false
+          stateSave: false,
+          search: { search: searchFromURL || '' }
         });
       } catch (err) { console.error('DataTable init error', err); }
     }
@@ -159,7 +197,12 @@
     function populateColumnToggles() {
       const saved = localStorage.getItem('visibleColumns');
       const visibleColumns = saved ? JSON.parse(saved) : defaultColumns;
-      const togglesHtml = allColumns.map(col => '<div class="column-checkbox">' + '<input type="checkbox" id="col_' + col.data.replace(/[^a-zA-Z0-9]/g, '_') + '" value="' + col.data + '"' + (visibleColumns.includes(col.data) ? ' checked' : '') + '>' + '<label for="col_' + col.data.replace(/[^a-zA-Z0-9]/g, '_') + '">' + col.title + '</label></div>').join('');
+      // Filter out id and original_id fields from columns
+      const filteredColumns = allColumns.filter(col => {
+        const data = col.data.toLowerCase();
+        return data !== 'id' && data !== 'original_id' && !data.endsWith('__id') && !data.endsWith('__original_id');
+      });
+      const togglesHtml = filteredColumns.map(col => '<div class="column-checkbox">' + '<input type="checkbox" id="col_' + col.data.replace(/[^a-zA-Z0-9]/g, '_') + '" value="' + col.data + '"' + (visibleColumns.includes(col.data) ? ' checked' : '') + '>' + '<label for="col_' + col.data.replace(/[^a-zA-Z0-9]/g, '_') + '">' + col.title + '</label></div>').join('');
       $('#columnToggles').html(togglesHtml);
 
       $('#columnToggles').off('change', 'input[type="checkbox"]').on('change', 'input[type="checkbox"]', function() {
@@ -177,10 +220,19 @@
     $.ajax({ url: '/api/unified/columns/', success: function(resp) { allColumns = resp.columns || []; initializeTable(); populateColumnToggles(); }, error: function() { console.error('failed to load columns'); allColumns = [{data:'id',title:'ID'},{data:'family',title:'Family'}]; initializeTable(); populateColumnToggles(); } });
 
     $('#toggleColumnsBtn').click(function() { $('#columnToggles').toggleClass('show'); $(this).text($(this).text().includes('▶') ? '▼ Show/Hide Columns' : '▶ Show/Hide Columns'); });
-    $('#applyFilters').click(function() { if (table) table.ajax.reload(null, false); });
-    $('#clearFilters').click(function() { $('#filterFamily,#filterCountry,#filterYearFrom,#filterYearTo').val(''); if (table) { table.search('').draw(); } });
+    $('#applyFilters').click(function() { updateURLParams(); if (table) table.ajax.reload(null, false); });
+    $('#clearFilters').click(function() { $('#filterFamily,#filterCountry,#filterYearFrom,#filterYearTo').val(''); if (table) { table.search('').draw(); } updateURLParams(); });
     $('#exportData').click(function() { const filters = getActiveFilters(); const saved = localStorage.getItem('visibleColumns'); const visibleColumns = saved ? JSON.parse(saved) : defaultColumns; const params = new URLSearchParams(); for (const [k,v] of Object.entries(filters)) if (v) params.append(k,v); if (visibleColumns && visibleColumns.length) params.append('columns', visibleColumns.join(',')); const orig = $(this).text(); $(this).text('Exporting...').prop('disabled',true); window.location.href = '/api/unified/export/?' + params.toString(); setTimeout(()=>$(this).text(orig).prop('disabled',false),2000); });
     $('.filter-group input').keypress(function(e){ if (e.which===13) $('#applyFilters').click(); });
+    
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', function() {
+      const searchValue = loadFiltersFromURL();
+      if (table) {
+        if (searchValue) table.search(searchValue);
+        table.ajax.reload(null, false);
+      }
+    });
   });
   </script>
 </body>
