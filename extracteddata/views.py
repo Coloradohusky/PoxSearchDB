@@ -312,7 +312,7 @@ def sequence_detail(request, pk):
     sequence = get_object_or_404(Sequence, pk=pk)
     return render(request, 'sequence_detail.html', {'sequence': sequence})
 
-def _build_search_query(search_value, max_depth=3):
+def _build_search_query(search_value, model, max_depth=3):
     def get_searchable_fields(model, prefix='', depth=0):
         if depth > max_depth:
             return []
@@ -343,8 +343,8 @@ def _build_search_query(search_value, max_depth=3):
 
         return fields
 
-    # Get all searchable fields
-    searchable_fields = get_searchable_fields(Pathogen)
+    # Get all searchable fields for the given model
+    searchable_fields = get_searchable_fields(model)
 
     # Build Q objects
     q_objects = Q()
@@ -354,32 +354,182 @@ def _build_search_query(search_value, max_depth=3):
     return q_objects
 
 class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Pathogen.objects.select_related(
-        "host", "host__study", "host__study__full_text"
-    )
     serializer_class = AutoFlattenSerializer
     filter_backends = [filters.OrderingFilter]
     ordering_fields = '__all__'
+    
+    # Map of model names to their classes and select_related configs
+    MODEL_CONFIG = {
+        'pathogen': {
+            'model': Pathogen,
+            'select_related': ["host", "host__study", "host__study__full_text"],
+        },
+        'host': {
+            'model': Host,
+            'select_related': ["study", "study__full_text"],
+        },
+        'sequence': {
+            'model': Sequence,
+            'select_related': ["pathogen", "host", "study"],
+        },
+        'descriptive': {
+            'model': Descriptive,
+            'select_related': ["full_text"],
+        },
+        'fulltext': {
+            'model': FullText,
+            'select_related': [],
+        },
+    }
+
+    def _get_filterable_fields(self, model, max_depth=2):
+        """
+        Automatically detect filterable fields from a model.
+        Returns a list of field definitions with metadata for UI generation.
+        """
+        from django.db import models as django_models
+        
+        fields = []
+        
+        def add_field(field, prefix='', depth=0):
+            if depth > max_depth:
+                return
+            
+            field_name = f"{prefix}{field.name}"
+            field_type = type(field).__name__
+            
+            # Determine filter configuration based on field type
+            filter_config = None
+            
+            # Text fields
+            if isinstance(field, (django_models.CharField, django_models.TextField)):
+                filter_config = {
+                    'name': field_name,
+                    'label': field.verbose_name.title() if hasattr(field, 'verbose_name') else field.name.replace('_', ' ').title(),
+                    'type': 'text',
+                    'filter_type': 'icontains',
+                }
+            
+            # Numeric fields
+            elif isinstance(field, (django_models.IntegerField, django_models.FloatField, 
+                                   django_models.DecimalField, django_models.PositiveIntegerField)):
+                filter_config = {
+                    'name': field_name,
+                    'label': field.verbose_name.title() if hasattr(field, 'verbose_name') else field.name.replace('_', ' ').title(),
+                    'type': 'number',
+                    'filter_type': 'range',  # Supports __gte and __lte
+                }
+            
+            # Date fields
+            elif isinstance(field, (django_models.DateField, django_models.DateTimeField)):
+                filter_config = {
+                    'name': field_name,
+                    'label': field.verbose_name.title() if hasattr(field, 'verbose_name') else field.name.replace('_', ' ').title(),
+                    'type': 'date',
+                    'filter_type': 'range',  # Supports __gte and __lte
+                }
+            
+            # Boolean fields
+            elif isinstance(field, django_models.BooleanField):
+                filter_config = {
+                    'name': field_name,
+                    'label': field.verbose_name.title() if hasattr(field, 'verbose_name') else field.name.replace('_', ' ').title(),
+                    'type': 'boolean',
+                    'filter_type': 'exact',
+                }
+            
+            if filter_config:
+                fields.append(filter_config)
+            
+            # Follow foreign keys to add related fields
+            if hasattr(field, 'related_model') and field.related_model and depth < max_depth:
+                try:
+                    for related_field in field.related_model._meta.get_fields():
+                        if not (related_field.one_to_many or related_field.many_to_many):
+                            add_field(related_field, f"{field_name}__", depth + 1)
+                except:
+                    pass
+        
+        # Process all model fields
+        for field in model._meta.get_fields():
+            if not (field.one_to_many or field.many_to_many):
+                add_field(field)
+        
+        return fields
+
+    def _apply_filter(self, queryset, field_config, value):
+        """
+        Apply a filter to the queryset based on field configuration.
+        """
+        field_name = field_config['name']
+        filter_type = field_config['filter_type']
+        
+        if filter_type == 'icontains':
+            return queryset.filter(**{f"{field_name}__icontains": value})
+        elif filter_type == 'exact':
+            # Handle boolean conversion
+            if field_config['type'] == 'boolean':
+                bool_value = value.lower() in ('true', '1', 'yes')
+                return queryset.filter(**{field_name: bool_value})
+            return queryset.filter(**{field_name: value})
+        elif filter_type == 'range':
+            # Range filters use __gte and __lte suffixes
+            # Handled separately in get_queryset
+            pass
+        
+        return queryset
 
     def get_queryset(self):
-        queryset = super().get_queryset()
         params = self.request.query_params
+        
+        # Get the selected model (default to pathogen for backwards compatibility)
+        model_name = params.get('model', 'pathogen').lower()
+        config = self.MODEL_CONFIG.get(model_name, self.MODEL_CONFIG['pathogen'])
+        
+        # Get the model class and build queryset
+        model_class = config['model']
+        queryset = model_class.objects.all()
+        
+        # Apply select_related for performance
+        if config['select_related']:
+            queryset = queryset.select_related(*config['select_related'])
         
         # Handle search programmatically
         search_value = params.get('search')
         if search_value:
-            search_query = _build_search_query(search_value)
+            search_query = _build_search_query(search_value, model_class)
             queryset = queryset.filter(search_query)
         
-        # Custom filters
-        if params.get('family'):
-            queryset = queryset.filter(family__icontains=params['family'])
-        if params.get('country'):
-            queryset = queryset.filter(host__country__icontains=params['country'])
-        if params.get('year_from'):
-            queryset = queryset.filter(host__study__full_text__publication_year__gte=params['year_from'])
-        if params.get('year_to'):
-            queryset = queryset.filter(host__study__full_text__publication_year__lte=params['year_to'])
+        # Apply dynamic filters based on filterable fields
+        filterable_fields = self._get_filterable_fields(model_class)
+        for field_config in filterable_fields:
+            field_name = field_config['name']
+            
+            # Handle range filters (e.g., year_from, year_to)
+            if field_config['filter_type'] == 'range':
+                # Check for _from suffix
+                from_value = params.get(f"{field_name}_from")
+                if from_value:
+                    try:
+                        queryset = queryset.filter(**{f"{field_name}__gte": from_value})
+                    except:
+                        pass
+                
+                # Check for _to suffix
+                to_value = params.get(f"{field_name}_to")
+                if to_value:
+                    try:
+                        queryset = queryset.filter(**{f"{field_name}__lte": to_value})
+                    except:
+                        pass
+            else:
+                # Handle direct filters
+                param_value = params.get(field_name)
+                if param_value:
+                    try:
+                        queryset = self._apply_filter(queryset, field_config, param_value)
+                    except:
+                        pass
         
         # Handle ordering
         ordering = params.get('ordering')
@@ -404,6 +554,25 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
             for key in sample_data.keys()
         ]
         return JsonResponse({"columns": columns})
+    
+    @action(detail=False, methods=["get"])
+    def models(self, request):
+        """Return available model types for filtering"""
+        models = [
+            {"value": key, "label": key.replace('_', ' ').title()}
+            for key in self.MODEL_CONFIG.keys()
+        ]
+        return JsonResponse({"models": models})
+    
+    @action(detail=False, methods=["get"])
+    def filters(self, request):
+        """Return available filters for the selected model"""
+        model_name = request.query_params.get('model', 'pathogen').lower()
+        config = self.MODEL_CONFIG.get(model_name, self.MODEL_CONFIG['pathogen'])
+        model_class = config['model']
+        
+        filterable_fields = self._get_filterable_fields(model_class)
+        return JsonResponse({"filters": filterable_fields})
 
     @action(detail=False, methods=["get"])
     def export(self, request):

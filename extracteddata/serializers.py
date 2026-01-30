@@ -37,11 +37,11 @@ class SequenceSerializer(serializers.ModelSerializer):
         model = Sequence
         fields = '__all__'
 
-class AutoFlattenSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Pathogen
-        fields = "__all__"
-
+class AutoFlattenSerializer(serializers.Serializer):
+    """
+    Dynamically flattens any Django model instance into a flat dictionary.
+    Works with any model, not just Pathogen.
+    """
     def to_representation(self, instance):
         flat = {}
 
