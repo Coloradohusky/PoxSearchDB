@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Pathogen Search{% endblock %}
+{% block title %}Database Search{% endblock %}
 {% block content %}
 <!DOCTYPE html>
 <html lang="en">
@@ -16,31 +16,31 @@
     .column-toggle-content { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
     .column-toggle-content.show { max-height: 500px; overflow-y: auto; }
     .column-checkbox { display: flex; align-items: center; gap: 5px; }
+    .model-selector { background: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    .model-selector label { font-weight: bold; margin-right: 10px; }
   </style>
 </head>
 <body>
-  <h1>Pathogen Search</h1>
+  <h1>Database Search</h1>
+
+  <!-- Model Selector -->
+  <div class="model-selector">
+    <label for="modelSelect">Select Data Type:</label>
+    <select id="modelSelect" class="form-control" style="width: auto; display: inline-block;">
+      <option value="pathogen">Pathogen</option>
+      <option value="host">Host</option>
+      <option value="sequence">Sequence</option>
+      <option value="descriptive">Descriptive</option>
+      <option value="fulltext">Full Text</option>
+    </select>
+    <span style="margin-left: 15px; color: #666;">Search and filter across different data types in the database</span>
+  </div>
 
   <!-- Advanced Filters -->
   <div class="filter-container">
     <h4>Filters</h4>
-    <div class="filter-row">
-      <div class="filter-group">
-        <label for="filterFamily">Family</label>
-        <input type="text" id="filterFamily" placeholder="Enter family">
-      </div>
-      <div class="filter-group">
-        <label for="filterCountry">Country</label>
-        <input type="text" id="filterCountry" placeholder="Enter country">
-      </div>
-      <div class="filter-group">
-        <label for="filterYearFrom">Year From</label>
-        <input type="number" id="filterYearFrom" placeholder="e.g. 2000">
-      </div>
-      <div class="filter-group">
-        <label for="filterYearTo">Year To</label>
-        <input type="number" id="filterYearTo" placeholder="e.g. 2024">
-      </div>
+    <div class="filter-row" id="dynamicFilters">
+      <!-- Filters will be dynamically inserted based on model selection -->
     </div>
     <div class="btn-group">
       <button id="applyFilters" class="btn btn-primary">Apply Filters</button>
@@ -67,59 +67,183 @@
   $(document).ready(function() {
     let table = null;
     let allColumns = [];
+    let currentModel = 'pathogen';
+    let currentFilters = [];
 
-    const defaultColumns = [ 'id','family','assay','tested','host__scientific_name','host__study__full_text__title' ];
+    // Define default visible columns for each model
+    const defaultColumns = {
+      pathogen: ['id', 'family', 'scientific_name', 'assay', 'tested', 'positive', 'host__scientific_name', 'host__country'],
+      host: ['id', 'scientific_name', 'country', 'locality', 'individual_count', 'event_date'],
+      sequence: ['id', 'scientific_name', 'accession_number', 'sequence_type', 'date_sampled'],
+      descriptive: ['id', 'dataset_name', 'sampling_effort', 'data_access', 'full_text__title'],
+      fulltext: ['id', 'title', 'author', 'publication_year', 'decision']
+    };
+
+    function loadFilters(callback) {
+      $.ajax({
+        url: '/api/unified/filters/',
+        data: { model: currentModel },
+        success: function(resp) {
+          currentFilters = resp.filters || [];
+          if (callback) callback();
+        },
+        error: function(xhr, status, error) {
+          console.error('Failed to load filters:', error);
+          // Show user-visible error message
+          $('#dynamicFilters').html(
+            '<div class="alert alert-warning" role="alert">' +
+            '<strong>Warning:</strong> Could not load filters. Please refresh the page or try again later.' +
+            '</div>'
+          );
+          currentFilters = [];
+          if (callback) callback();
+        }
+      });
+    }
+
+    function renderFilters() {
+      if (!currentFilters || currentFilters.length === 0) {
+        $('#dynamicFilters').html('<div style="padding: 10px; color: #666;">Loading filters...</div>');
+        return;
+      }
+
+      // Limit to most relevant fields (avoid overwhelming UI)
+      const MAX_VISIBLE_FILTERS = 8;
+      const relevantFilters = currentFilters.filter(f => {
+        // Include only top-level fields and first-level related fields
+        const depth = (f.name.match(/__/g) || []).length;
+        if (depth > 1) return false;
+
+        // Exclude model ID fields (id, pk, original_id, and related *_id/*__id/*__pk)
+        const name = (f.name || '').toLowerCase();
+        const isIdField = (
+          name.endsWith('id') ||
+          name.endsWith('pk') ||
+          name.endsWith('original_id')
+        );
+        return !isIdField;
+      }).slice(0, MAX_VISIBLE_FILTERS);
+
+      const html = relevantFilters.map(f => {
+        const id = 'filter_' + f.name.replace(/[^a-zA-Z0-9]/g, '_');
+        
+        if (f.filter_type === 'range') {
+          // Create two inputs for range filters (from/to)
+          return `
+            <div class="filter-group">
+              <label for="${id}_from">${f.label} (From)</label>
+              <input type="${f.type}" id="${id}_from" placeholder="Min" data-param="${f.name}_from">
+            </div>
+            <div class="filter-group">
+              <label for="${id}_to">${f.label} (To)</label>
+              <input type="${f.type}" id="${id}_to" placeholder="Max" data-param="${f.name}_to">
+            </div>
+          `;
+        } else if (f.type === 'boolean') {
+          // Create a select for boolean filters
+          return `
+            <div class="filter-group">
+              <label for="${id}">${f.label}</label>
+              <select id="${id}" data-param="${f.name}">
+                <option value="">All</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+          `;
+        } else {
+          // Create standard text input
+          return `
+            <div class="filter-group">
+              <label for="${id}">${f.label}</label>
+              <input type="${f.type}" id="${id}" placeholder="Enter ${f.label.toLowerCase()}" data-param="${f.name}">
+            </div>
+          `;
+        }
+      }).join('');
+      
+      $('#dynamicFilters').html(html || '<div style="padding: 10px; color: #666;">No filters available</div>');
+    }
 
     function getActiveFilters() {
-      const params = {};
+      const params = { model: currentModel };
       if (table) {
-        const searchValue = table.search(); if (searchValue) params.search = searchValue;
-        const order = table.order(); if (order && order.length > 0) {
-          const orderColumnIndex = order[0][0]; const orderDir = order[0][1];
+        const searchValue = table.search(); 
+        if (searchValue) params.search = searchValue;
+        const order = table.order(); 
+        if (order && order.length > 0) {
+          const orderColumnIndex = order[0][0]; 
+          const orderDir = order[0][1];
           const columnData = table.settings()[0].aoColumns[orderColumnIndex].data;
           params.ordering = (orderDir === 'asc' ? '' : '-') + columnData;
         }
       }
-      const family = $('#filterFamily').val(); const country = $('#filterCountry').val();
-      const yearFrom = $('#filterYearFrom').val(); const yearTo = $('#filterYearTo').val();
-      if (family) params.family = family; if (country) params.country = country;
-      if (yearFrom) params.year_from = yearFrom; if (yearTo) params.year_to = yearTo;
+      
+      // Get dynamic filter values
+      $('#dynamicFilters input, #dynamicFilters select').each(function() {
+        const val = $(this).val();
+        const param = $(this).data('param');
+        if (val && param) {
+          params[param] = val;
+        }
+      });
+      
       return params;
     }
 
+    function getStorageKey(key) {
+      return `${currentModel}_${key}`;
+    }
+
     function initializeTable() {
-      const saved = localStorage.getItem('visibleColumns');
-      const visibleColumns = saved ? JSON.parse(saved) : defaultColumns;
+      const saved = localStorage.getItem(getStorageKey('visibleColumns'));
+      const visibleColumns = saved ? JSON.parse(saved) : (defaultColumns[currentModel] || []);
       console.debug('[initializeTable] visibleColumns=', visibleColumns, 'allColumns=', allColumns.length);
 
       const columnsConfig = allColumns.map(col => ({
-        data: col.data, title: col.title, defaultContent: '-', orderable: true,
+        data: col.data, 
+        title: col.title, 
+        defaultContent: '-', 
+        orderable: true,
         visible: visibleColumns.includes(col.data),
         render: function(data, type, row) {
           try {
-            if (col.data === 'host__study__full_text__title') {
-              var ft_id = row['host__study__full_text__id'] || row['host__study__full_text__pk'] || '';
-              if (ft_id) return '<a href="/fulltext/' + ft_id + '/">' + (data || '') + '</a>';
-              return data;
-            }
-            if (col.data === 'id' || col.data.endsWith('__id') || col.data.endsWith('__pk')) {
-              var idKey = col.data; var idVal = row[idKey];
-              if (!idVal) { idKey = idKey.replace(/__pk$/, '__id'); idVal = row[idKey]; }
+            // Create links for ID fields
+            if (col.data === 'id') {
+              const idVal = row['id'];
               if (idVal) {
-                if (col.data.startsWith('host__study__full_text__') || idKey.startsWith('host__study__full_text__')) return '<a href="/fulltext/' + idVal + '/">' + (data || '') + '</a>';
-                if (col.data.startsWith('host__study__') || idKey.startsWith('host__study__')) return '<a href="/descriptive/' + idVal + '/">' + (data || '') + '</a>';
-                if (col.data.startsWith('host__') || idKey.startsWith('host__')) return '<a href="/host/' + idVal + '/">' + (data || '') + '</a>';
-                if (col.data.startsWith('pathogen__') || idKey.startsWith('pathogen__')) return '<a href="/pathogen/' + idVal + '/">' + (data || '') + '</a>';
-                if (col.data.startsWith('sequence__') || idKey.startsWith('sequence__')) return '<a href="/sequence/' + idVal + '/">' + (data || '') + '</a>';
-                if (col.data === 'id') return '<a href="/pathogen/' + idVal + '/">' + (data || '') + '</a>';
+                return '<a href="/' + currentModel + '/' + idVal + '/">' + (data || '') + '</a>';
               }
             }
-          } catch (e) { console.error('render error for column', col, e); }
+            // Handle nested object links
+            if (col.data.includes('__') && (col.data.endsWith('__id') || col.data.endsWith('__pk'))) {
+              const idVal = data;
+              if (idVal) {
+                const parts = col.data.split('__');
+                const modelName = parts[parts.length - 2];
+                return '<a href="/' + modelName + '/' + idVal + '/">' + idVal + '</a>';
+              }
+            }
+            // Handle title links
+            if (col.data.includes('full_text__title')) {
+              const ft_id = row['full_text__id'] || row['full_text__pk'] || '';
+              if (ft_id) return '<a href="/fulltext/' + ft_id + '/">' + (data || '') + '</a>';
+            }
+          } catch (e) { 
+            console.error('render error for column', col, e); 
+          }
           return data;
         }
       }));
 
-      if (table) { try { table.destroy(true); } catch (e) { console.warn('destroy err', e); } $('#unifiedTable').empty(); }
+      if (table) { 
+        try { 
+          table.destroy(); 
+        } catch (e) { 
+          console.warn('destroy err', e); 
+        } 
+        $('#unifiedTable').empty(); 
+      }
 
       const headerHtml = allColumns.map(c => '<th>' + c.title + '</th>').join('');
       $('#unifiedTable').html('<thead><tr>' + headerHtml + '</tr></thead><tbody></tbody>');
@@ -132,14 +256,34 @@
             url: '/api/unified/',
             data: function(d) {
               console.debug('[DataTable ajax.data] params', d);
-              const params = { limit: d.length, offset: d.start };
+              const params = { 
+                limit: d.length, 
+                offset: d.start,
+                model: currentModel
+              };
               if (d.search && d.search.value) params.search = d.search.value;
-              if (d.order && d.order.length > 0) { const orderColumn = d.columns[d.order[0].column]; const orderDir = d.order[0].dir === 'asc' ? '' : '-'; params.ordering = orderDir + orderColumn.data; }
-              const extra = getActiveFilters(); Object.assign(params, extra);
+              if (d.order && d.order.length > 0) { 
+                const orderColumn = d.columns[d.order[0].column]; 
+                const orderDir = d.order[0].dir === 'asc' ? '' : '-'; 
+                params.ordering = orderDir + orderColumn.data; 
+              }
+              const extra = getActiveFilters(); 
+              Object.assign(params, extra);
               return params;
             },
-            dataSrc: function(json) { console.debug('[DataTable dataSrc] got', json); if (!json || !json.results) { console.error('Invalid response', json); return []; } json.recordsTotal = json.count || 0; json.recordsFiltered = json.count || 0; return json.results; },
-            error: function(xhr, error, code) { console.error('DataTables Ajax error', error, code, xhr && xhr.responseText); }
+            dataSrc: function(json) { 
+              console.debug('[DataTable dataSrc] got', json); 
+              if (!json || !json.results) { 
+                console.error('Invalid response', json); 
+                return []; 
+              } 
+              json.recordsTotal = json.count || 0; 
+              json.recordsFiltered = json.count || 0; 
+              return json.results; 
+            },
+            error: function(xhr, error, code) { 
+              console.error('DataTables Ajax error', error, code, xhr && xhr.responseText); 
+            }
           },
           columns: columnsConfig,
           processing: true,
@@ -153,34 +297,125 @@
           searchDelay: 500,
           stateSave: false
         });
-      } catch (err) { console.error('DataTable init error', err); }
+      } catch (err) { 
+        console.error('DataTable init error', err); 
+      }
     }
 
     function populateColumnToggles() {
-      const saved = localStorage.getItem('visibleColumns');
-      const visibleColumns = saved ? JSON.parse(saved) : defaultColumns;
-      const togglesHtml = allColumns.map(col => '<div class="column-checkbox">' + '<input type="checkbox" id="col_' + col.data.replace(/[^a-zA-Z0-9]/g, '_') + '" value="' + col.data + '"' + (visibleColumns.includes(col.data) ? ' checked' : '') + '>' + '<label for="col_' + col.data.replace(/[^a-zA-Z0-9]/g, '_') + '">' + col.title + '</label></div>').join('');
+      const saved = localStorage.getItem(getStorageKey('visibleColumns'));
+      const visibleColumns = saved ? JSON.parse(saved) : (defaultColumns[currentModel] || []);
+      const togglesHtml = allColumns.map(col => 
+        '<div class="column-checkbox">' + 
+        '<input type="checkbox" id="col_' + col.data.replace(/[^a-zA-Z0-9]/g, '_') + '" value="' + col.data + '"' + 
+        (visibleColumns.includes(col.data) ? ' checked' : '') + '>' + 
+        '<label for="col_' + col.data.replace(/[^a-zA-Z0-9]/g, '_') + '">' + col.title + '</label>' +
+        '</div>'
+      ).join('');
       $('#columnToggles').html(togglesHtml);
 
       $('#columnToggles').off('change', 'input[type="checkbox"]').on('change', 'input[type="checkbox"]', function() {
-        const checked = $('#columnToggles input[type="checkbox"]:checked').map(function() { return $(this).val(); }).get();
-        if (checked.length === 0) { alert('Please select at least one column'); $(this).prop('checked', true); return; }
-        localStorage.setItem('visibleColumns', JSON.stringify(checked));
+        const checked = $('#columnToggles input[type="checkbox"]:checked').map(function() { 
+          return $(this).val(); 
+        }).get();
+        if (checked.length === 0) { 
+          alert('Please select at least one column'); 
+          $(this).prop('checked', true); 
+          return; 
+        }
+        localStorage.setItem(getStorageKey('visibleColumns'), JSON.stringify(checked));
         if (table) {
-          const toggled = $(this).val(); const colIndex = allColumns.findIndex(c => c.data === toggled);
-          if (colIndex >= 0) { const show = $(this).is(':checked'); try { table.column(colIndex).visible(show, false); table.columns.adjust().draw(false); } catch (e) { console.error('toggle visible err', e); initializeTable(); } }
-          else { initializeTable(); }
-        } else { initializeTable(); }
+          const toggled = $(this).val(); 
+          const colIndex = allColumns.findIndex(c => c.data === toggled);
+          if (colIndex >= 0) { 
+            const show = $(this).is(':checked'); 
+            try { 
+              table.column(colIndex).visible(show, false); 
+              table.columns.adjust().draw(false); 
+            } catch (e) { 
+              console.error('toggle visible err', e); 
+              initializeTable(); 
+            }
+          } else { 
+            initializeTable(); 
+          }
+        } else { 
+          initializeTable(); 
+        }
       });
     }
 
-    $.ajax({ url: '/api/unified/columns/', success: function(resp) { allColumns = resp.columns || []; initializeTable(); populateColumnToggles(); }, error: function() { console.error('failed to load columns'); allColumns = [{data:'id',title:'ID'},{data:'family',title:'Family'}]; initializeTable(); populateColumnToggles(); } });
+    function loadColumns() {
+      $.ajax({ 
+        url: '/api/unified/columns/', 
+        data: { model: currentModel },
+        success: function(resp) { 
+          allColumns = resp.columns || []; 
+          initializeTable(); 
+          populateColumnToggles(); 
+        }, 
+        error: function(xhr, status, error) { 
+          console.error('Failed to load columns:', error);
+          // Show user-visible error message
+          alert('Warning: Could not load table columns. Using minimal fallback. Please refresh the page.');
+          allColumns = [{data:'id',title:'ID'}]; 
+          initializeTable(); 
+          populateColumnToggles(); 
+        } 
+      });
+    }
 
-    $('#toggleColumnsBtn').click(function() { $('#columnToggles').toggleClass('show'); $(this).text($(this).text().includes('▶') ? '▼ Show/Hide Columns' : '▶ Show/Hide Columns'); });
-    $('#applyFilters').click(function() { if (table) table.ajax.reload(null, false); });
-    $('#clearFilters').click(function() { $('#filterFamily,#filterCountry,#filterYearFrom,#filterYearTo').val(''); if (table) { table.search('').draw(); } });
-    $('#exportData').click(function() { const filters = getActiveFilters(); const saved = localStorage.getItem('visibleColumns'); const visibleColumns = saved ? JSON.parse(saved) : defaultColumns; const params = new URLSearchParams(); for (const [k,v] of Object.entries(filters)) if (v) params.append(k,v); if (visibleColumns && visibleColumns.length) params.append('columns', visibleColumns.join(',')); const orig = $(this).text(); $(this).text('Exporting...').prop('disabled',true); window.location.href = '/api/unified/export/?' + params.toString(); setTimeout(()=>$(this).text(orig).prop('disabled',false),2000); });
-    $('.filter-group input').keypress(function(e){ if (e.which===13) $('#applyFilters').click(); });
+    // Initialize with default model
+    loadFilters(function() {
+      renderFilters();
+      loadColumns();
+    });
+
+    // Model selector change handler
+    $('#modelSelect').change(function() {
+      currentModel = $(this).val();
+      loadFilters(function() {
+        renderFilters();
+        loadColumns();
+      });
+    });
+
+    $('#toggleColumnsBtn').click(function() { 
+      $('#columnToggles').toggleClass('show'); 
+      $(this).text($(this).text().includes('▶') ? '▼ Show/Hide Columns' : '▶ Show/Hide Columns'); 
+    });
+    
+    $('#applyFilters').click(function() { 
+      if (table) table.ajax.reload(null, false); 
+    });
+    
+    $('#clearFilters').click(function() { 
+      $('#dynamicFilters input, #dynamicFilters select').val(''); 
+      if (table) { 
+        table.search('').draw(); 
+      } 
+    });
+    
+    $('#exportData').click(function() { 
+      const filters = getActiveFilters(); 
+      const saved = localStorage.getItem(getStorageKey('visibleColumns')); 
+      const visibleColumns = saved ? JSON.parse(saved) : (defaultColumns[currentModel] || []); 
+      const params = new URLSearchParams(); 
+      for (const [k,v] of Object.entries(filters)) {
+        if (v) params.append(k,v); 
+      }
+      if (visibleColumns && visibleColumns.length) {
+        params.append('columns', visibleColumns.join(',')); 
+      }
+      const orig = $(this).text(); 
+      $(this).text('Exporting...').prop('disabled',true); 
+      window.location.href = '/api/unified/export/?' + params.toString(); 
+      setTimeout(()=>$(this).text(orig).prop('disabled',false),2000); 
+    });
+    
+    $('#dynamicFilters').on('keypress', 'input', function(e){ 
+      if (e.which===13) $('#applyFilters').click(); 
+    });
   });
   </script>
 </body>
