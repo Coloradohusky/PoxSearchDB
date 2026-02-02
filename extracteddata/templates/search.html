@@ -39,22 +39,6 @@
   <!-- Advanced Filters -->
   <div class="filter-container">
     <h4>Filters</h4>
-    <div class="filter-row" style="align-items: flex-end;">
-      <div class="filter-group" style="flex: 0 0 280px;">
-        <label for="availableFiltersSelect">Add Filter</label>
-        <select id="availableFiltersSelect">
-          <option value="">Select a filter</option>
-        </select>
-      </div>
-      <div class="filter-group" style="flex: 0 0 140px;">
-        <button id="addFilterBtn" class="btn btn-outline-primary" style="width: 100%;">Add</button>
-      </div>
-      <div class="filter-group" style="flex: 1;">
-        <div style="color: #666; padding-top: 6px;">
-          Add or remove filters to customize this view.
-        </div>
-      </div>
-    </div>
     <div class="filter-row" id="dynamicFilters">
       <!-- Filters will be dynamically inserted based on model selection -->
     </div>
@@ -85,7 +69,6 @@
     let allColumns = [];
     let currentModel = 'pathogen';
     let currentFilters = [];
-    let selectedFilters = [];
 
     // Define default visible columns for each model
     const defaultColumns = {
@@ -102,9 +85,6 @@
         data: { model: currentModel },
         success: function(resp) {
           currentFilters = resp.filters || [];
-          if (!selectedFilters.length) {
-            initializeSelectedFilters();
-          }
           if (callback) callback();
         },
         error: function(xhr, status, error) {
@@ -137,29 +117,30 @@
         // Exclude model ID fields (id, pk, original_id, and related *_id/*__id/*__pk)
         const name = (f.name || '').toLowerCase();
         const isIdField = (
-          if (!currentFilters || currentFilters.length === 0) {
-            $('#dynamicFilters').html('<div style="padding: 10px; color: #666;">Loading filters...</div>');
+          name === 'id' ||
+          name === 'pk' ||
           name === 'original_id'
         );
-
-          if (!selectedFilters || selectedFilters.length === 0) {
-            $('#dynamicFilters').html('<div style="padding: 10px; color: #666;">No filters selected. Use "Add Filter" above.</div>');
-            renderAvailableFilters();
-            return;
-          }
         return !isIdField;
-          const html = selectedFilters.map(f => {
+      }).slice(0, MAX_VISIBLE_FILTERS);
+
+      const html = relevantFilters.map(f => {
+        const id = 'filter_' + f.name.replace(/[^a-zA-Z0-9]/g, '_');
+        
+        if (f.filter_type === 'range') {
+          // Create two inputs for range filters (from/to)
+          return `
+            <div class="filter-group">
               <label for="${id}_from">${f.label} (From)</label>
               <input type="${f.type}" id="${id}_from" placeholder="Min" data-param="${f.name}_from">
             </div>
             <div class="filter-group">
               <label for="${id}_to">${f.label} (To)</label>
-                <div class="filter-group" data-filter-name="${f.name}">
+              <input type="${f.type}" id="${id}_to" placeholder="Max" data-param="${f.name}_to">
             </div>
           `;
-                  <button type="button" class="btn btn-link remove-filter" data-filter-name="${f.name}" style="padding: 0; margin-top: 6px;">Remove</button>
         } else if (f.type === 'boolean') {
-                <div class="filter-group" data-filter-name="${f.name}">
+          // Create a select for boolean filters
           return `
             <div class="filter-group">
               <label for="${id}">${f.label}</label>
@@ -167,69 +148,28 @@
                 <option value="">All</option>
                 <option value="true">Yes</option>
                 <option value="false">No</option>
-                <div class="filter-group" data-filter-name="${f.name}">
+              </select>
             </div>
           `;
         } else {
           // Create standard text input
           return `
             <div class="filter-group">
-                  <button type="button" class="btn btn-link remove-filter" data-filter-name="${f.name}" style="padding: 0; margin-top: 6px;">Remove</button>
               <label for="${id}">${f.label}</label>
               <input type="${f.type}" id="${id}" placeholder="Enter ${f.label.toLowerCase()}" data-param="${f.name}">
             </div>
           `;
         }
-                <div class="filter-group" data-filter-name="${f.name}">
+      }).join('');
       
       $('#dynamicFilters').html(html || '<div style="padding: 10px; color: #666;">No filters available</div>');
-                  <button type="button" class="btn btn-link remove-filter" data-filter-name="${f.name}" style="padding: 0; margin-top: 6px;">Remove</button>
     }
 
     function getActiveFilters() {
       const params = { model: currentModel };
       if (table) {
         const searchValue = table.search(); 
-          renderAvailableFilters();
         if (searchValue) params.search = searchValue;
-
-        function isIdFilter(name) {
-          const n = (name || '').toLowerCase();
-          return (
-            n === 'id' ||
-            n === 'pk' ||
-            n === 'original_id' ||
-            n.endsWith('_id') ||
-            n.endsWith('__id') ||
-            n.endsWith('__pk') ||
-            n.endsWith('_pk') ||
-            n.endsWith('_original_id') ||
-            n.endsWith('__original_id')
-          );
-        }
-
-        function getEligibleFilters() {
-          return (currentFilters || []).filter(f => {
-            const depth = (f.name.match(/__/g) || []).length;
-            if (depth > 1) return false;
-            if (isIdFilter(f.name)) return false;
-            return true;
-          });
-        }
-
-        function initializeSelectedFilters() {
-          const MAX_VISIBLE_FILTERS = 8;
-          selectedFilters = getEligibleFilters().slice(0, MAX_VISIBLE_FILTERS);
-        }
-
-        function renderAvailableFilters() {
-          const selectedNames = new Set((selectedFilters || []).map(f => f.name));
-          const options = getEligibleFilters()
-            .filter(f => !selectedNames.has(f.name))
-            .map(f => `<option value="${f.name}">${f.label}</option>`)
-            .join('');
-          $('#availableFiltersSelect').html('<option value="">Select a filter</option>' + options);
-        }
         const order = table.order(); 
         if (order && order.length > 0) {
           const orderColumnIndex = order[0][0]; 
@@ -434,7 +374,6 @@
     // Model selector change handler
     $('#modelSelect').change(function() {
       currentModel = $(this).val();
-      selectedFilters = [];
       loadFilters(function() {
         renderFilters();
         loadColumns();
@@ -476,22 +415,6 @@
     
     $('#dynamicFilters').on('keypress', 'input', function(e){ 
       if (e.which===13) $('#applyFilters').click(); 
-    });
-
-    $('#addFilterBtn').click(function() {
-      const selectedName = $('#availableFiltersSelect').val();
-      if (!selectedName) return;
-      const candidate = (currentFilters || []).find(f => f.name === selectedName);
-      if (candidate) {
-        selectedFilters.push(candidate);
-        renderFilters();
-      }
-    });
-
-    $('#dynamicFilters').on('click', '.remove-filter', function() {
-      const name = $(this).data('filter-name');
-      selectedFilters = (selectedFilters || []).filter(f => f.name !== name);
-      renderFilters();
     });
   });
   </script>
