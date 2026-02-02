@@ -516,34 +516,59 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
         for field_config in filterable_fields:
             field_name = field_config['name']
             
-            # Handle range filters (e.g., year_from, year_to)
+            # Handle range filters (e.g., year_from, year_to or field__gte/field__lte)
             if field_config['filter_type'] == 'range':
-                # Check for _from suffix
-                from_value = params.get(f"{field_name}_from")
-                if from_value:
+                # Check for __gte suffix (Django ORM style from frontend)
+                gte_value = params.get(f"{field_name}__gte")
+                if gte_value:
                     try:
-                        queryset = queryset.filter(**{f"{field_name}__gte": from_value})
+                        queryset = queryset.filter(**{f"{field_name}__gte": gte_value})
                     except (ValueError, TypeError) as e:
                         # Invalid value for range filter, skip it
-                        print(f"Invalid range filter value for {field_name}_from: {e}", file=sys.stderr)
+                        print(f"Invalid range filter value for {field_name}__gte: {e}", file=sys.stderr)
                 
-                # Check for _to suffix
-                to_value = params.get(f"{field_name}_to")
-                if to_value:
+                # Check for __lte suffix (Django ORM style from frontend)
+                lte_value = params.get(f"{field_name}__lte")
+                if lte_value:
                     try:
-                        queryset = queryset.filter(**{f"{field_name}__lte": to_value})
+                        queryset = queryset.filter(**{f"{field_name}__lte": lte_value})
                     except (ValueError, TypeError) as e:
                         # Invalid value for range filter, skip it
-                        print(f"Invalid range filter value for {field_name}_to: {e}", file=sys.stderr)
+                        print(f"Invalid range filter value for {field_name}__lte: {e}", file=sys.stderr)
             else:
-                # Handle direct filters
-                param_value = params.get(field_name)
-                if param_value:
-                    try:
-                        queryset = self._apply_filter(queryset, field_config, param_value)
-                    except (ValueError, TypeError) as e:
-                        # Invalid filter value, skip it
-                        print(f"Invalid filter value for {field_name}: {e}", file=sys.stderr)
+                # Handle text and boolean filters with operator suffixes
+                # Check for each possible operator: exact, icontains, istartswith, iendswith
+                operators = ['exact', 'icontains', 'istartswith', 'iendswith']
+                applied = False
+                
+                for operator in operators:
+                    param_key = f"{field_name}__{operator}"
+                    param_value = params.get(param_key)
+                    
+                    if param_value:
+                        try:
+                            # Handle boolean conversion for exact matches
+                            if operator == 'exact' and field_config['type'] == 'boolean':
+                                bool_value = param_value.lower() in ('true', '1', 'yes', 't', 'y')
+                                queryset = queryset.filter(**{field_name: bool_value})
+                            else:
+                                # Apply the filter with the appropriate Django ORM lookup
+                                queryset = queryset.filter(**{param_key: param_value})
+                            applied = True
+                            break  # Only apply one operator per field
+                        except (ValueError, TypeError) as e:
+                            # Invalid filter value, skip it
+                            print(f"Invalid filter value for {param_key}: {e}", file=sys.stderr)
+                
+                # Also check for direct field name (for backwards compatibility)
+                if not applied:
+                    param_value = params.get(field_name)
+                    if param_value:
+                        try:
+                            queryset = self._apply_filter(queryset, field_config, param_value)
+                        except (ValueError, TypeError) as e:
+                            # Invalid filter value, skip it
+                            print(f"Invalid filter value for {field_name}: {e}", file=sys.stderr)
         
         # Handle ordering
         ordering = params.get('ordering')
