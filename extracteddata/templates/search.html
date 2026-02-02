@@ -6,10 +6,80 @@
 <head>
   <style>
     .filter-container { background: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
-    .filter-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-    .filter-group { flex: 1; min-width: 200px; }
-    .filter-group label { display: block; font-weight: bold; margin-bottom: 5px; }
-    .filter-group input, .filter-group select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+    .filter-item {
+      background: #fff;
+      border: 1px solid #ddd;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .filter-item-field {
+      flex: 1;
+      min-width: 150px;
+    }
+    .filter-item-operator {
+      flex: 0.8;
+      min-width: 120px;
+    }
+    .filter-item-value {
+      flex: 1;
+      min-width: 150px;
+    }
+    .filter-item-actions {
+      display: flex;
+      gap: 4px;
+    }
+    .filter-item-actions button {
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      background: #fff;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .filter-item-actions button:hover {
+      background: #f0f0f0;
+    }
+    .filter-item label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    .filter-item select, .filter-item input {
+      width: 100%;
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      font-size: 13px;
+    }
+    .filter-controls {
+      margin-bottom: 15px;
+      display: flex;
+      gap: 8px;
+    }
+    .filter-controls button {
+      padding: 8px 12px;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .filter-controls button:hover {
+      background: #0056b3;
+    }
+    .filter-controls button.btn-remove {
+      background: #dc3545;
+    }
+    .filter-controls button.btn-remove:hover {
+      background: #c82333;
+    }
     .btn-group { margin-top: 10px; }
     .column-toggle { background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
     .column-toggle-header { font-weight: bold; margin-bottom: 10px; cursor: pointer; }
@@ -39,7 +109,11 @@
   <!-- Advanced Filters -->
   <div class="filter-container">
     <h4>Filters</h4>
-    <div class="filter-row" id="dynamicFilters">
+    <div class="filter-controls">
+      <button id="addFilterBtn" class="btn btn-primary">+ Add Filter</button>
+      <button id="removeAllFiltersBtn" class="btn btn-remove">Remove All</button>
+    </div>
+    <div id="dynamicFilters">
       <!-- Filters will be dynamically inserted based on model selection -->
     </div>
     <div class="btn-group">
@@ -69,6 +143,36 @@
     let allColumns = [];
     let currentModel = 'pathogen';
     let currentFilters = [];
+    let activeFilters = []; // Array of user-defined filters with operators
+
+    // Operator definitions based on field type
+    const operatorsByType = {
+      'number': [
+        { value: 'exact', label: 'Equals' },
+        { value: 'gt', label: 'Greater than' },
+        { value: 'gte', label: 'Greater than or equal' },
+        { value: 'lt', label: 'Less than' },
+        { value: 'lte', label: 'Less than or equal' },
+        { value: 'range', label: 'Between' }
+      ],
+      'string': [
+        { value: 'exact', label: 'Equals' },
+        { value: 'icontains', label: 'Contains' },
+        { value: 'istartswith', label: 'Starts with' },
+        { value: 'iendswith', label: 'Ends with' }
+      ],
+      'boolean': [
+        { value: 'exact', label: 'Is' }
+      ],
+      'date': [
+        { value: 'exact', label: 'On date' },
+        { value: 'gt', label: 'After' },
+        { value: 'gte', label: 'On or after' },
+        { value: 'lt', label: 'Before' },
+        { value: 'lte', label: 'On or before' },
+        { value: 'range', label: 'Between' }
+      ]
+    };
 
     // Define default visible columns for each model
     const defaultColumns = {
@@ -101,71 +205,132 @@
       });
     }
 
-    function renderFilters() {
-      if (!currentFilters || currentFilters.length === 0) {
-        $('#dynamicFilters').html('<div style="padding: 10px; color: #666;">Loading filters...</div>');
+    function getFilterOperators(field) {
+      // Determine filter type based on field properties
+      if (field.type === 'boolean') return operatorsByType['boolean'];
+      if (field.filter_type === 'range' || ['date', 'datetime', 'timestamp'].includes(field.type)) return operatorsByType['date'];
+      if (['number', 'integer', 'decimal', 'float'].includes(field.type)) return operatorsByType['number'];
+      return operatorsByType['string'];
+    }
+
+    function renderActiveFilters() {
+      if (activeFilters.length === 0) {
+        $('#dynamicFilters').html('<div style="padding: 10px; color: #999; font-size: 13px;">No filters added. Click "+ Add Filter" to get started.</div>');
         return;
       }
 
-      // Limit to most relevant fields (avoid overwhelming UI)
-      const MAX_VISIBLE_FILTERS = 8;
-      const relevantFilters = currentFilters.filter(f => {
-        // Include only top-level fields and first-level related fields
-        const depth = (f.name.match(/__/g) || []).length;
-        if (depth > 1) return false;
-
-        // Exclude model ID fields (id, pk, original_id, and related *_id/*__id/*__pk)
-        const name = (f.name || '').toLowerCase();
-        const isIdField = (
-          name.endsWith('id') ||
-          name.endsWith('pk') ||
-          name.endsWith('original_id')
-        );
-        return !isIdField;
-      }).slice(0, MAX_VISIBLE_FILTERS);
-
-      const html = relevantFilters.map(f => {
-        const id = 'filter_' + f.name.replace(/[^a-zA-Z0-9]/g, '_');
+      const html = activeFilters.map((filter, idx) => {
+        const field = currentFilters.find(f => f.name === filter.field);
+        if (!field) return '';
         
-        if (f.filter_type === 'range') {
-          // Create two inputs for range filters (from/to)
-          return `
-            <div class="filter-group">
-              <label for="${id}_from">${f.label} (From)</label>
-              <input type="${f.type}" id="${id}_from" placeholder="Min" data-param="${f.name}_from">
-            </div>
-            <div class="filter-group">
-              <label for="${id}_to">${f.label} (To)</label>
-              <input type="${f.type}" id="${id}_to" placeholder="Max" data-param="${f.name}_to">
-            </div>
+        const operators = getFilterOperators(field);
+        const currentOp = operators.find(op => op.value === filter.operator) || operators[0];
+        
+        let valueInput = '';
+        if (filter.operator === 'range') {
+          valueInput = `
+            <input type="${field.type}" placeholder="From" value="${filter.value1 || ''}" class="filter-value-from" data-filter="${idx}">
+            <input type="${field.type}" placeholder="To" value="${filter.value2 || ''}" class="filter-value-to" data-filter="${idx}">
           `;
-        } else if (f.type === 'boolean') {
-          // Create a select for boolean filters
-          return `
-            <div class="filter-group">
-              <label for="${id}">${f.label}</label>
-              <select id="${id}" data-param="${f.name}">
-                <option value="">All</option>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </div>
+        } else if (field.type === 'boolean') {
+          const selected1 = filter.value === 'true' ? 'selected' : '';
+          const selected0 = filter.value === 'false' ? 'selected' : '';
+          valueInput = `
+            <select class="filter-value" data-filter="${idx}" data-field="${filter.field}" data-operator="${filter.operator}">
+              <option value=""></option>
+              <option value="true" ${selected1}>Yes</option>
+              <option value="false" ${selected0}>No</option>
+            </select>
           `;
         } else {
-          // Create standard text input
-          return `
-            <div class="filter-group">
-              <label for="${id}">${f.label}</label>
-              <input type="${f.type}" id="${id}" placeholder="Enter ${f.label.toLowerCase()}" data-param="${f.name}">
-            </div>
+          valueInput = `
+            <input type="${field.type}" placeholder="Value" value="${filter.value || ''}" class="filter-value" data-filter="${idx}" data-field="${filter.field}" data-operator="${filter.operator}">
           `;
         }
-      }).join('');
+        
+        return `
+          <div class="filter-item">
+            <div class="filter-item-field">
+              <label>Field</label>
+              <select class="filter-field" data-filter="${idx}">
+                ${currentFilters.map(f => `<option value="${f.name}" ${f.name === filter.field ? 'selected' : ''}>${f.label}</option>`).join('')}
+              </select>
+            </div>
+            <div class="filter-item-operator">
+              <label>Operator</label>
+              <select class="filter-operator" data-filter="${idx}" data-field="${filter.field}">
+                ${operators.map(op => `<option value="${op.value}" ${op.value === filter.operator ? 'selected' : ''}>${op.label}</option>`).join('')}
+              </select>
+            </div>
+            <div class="filter-item-value">
+              <label>Value</label>
+              ${valueInput}
+            </div>
+            <div class="filter-item-actions">
+              <button type="button" class="btn-remove-filter" data-filter="${idx}" title="Remove filter">Remove</button>
+            </div>
+          </div>
+        `;
+      }).filter(h => h).join('');
       
-      $('#dynamicFilters').html(html || '<div style="padding: 10px; color: #666;">No filters available</div>');
+      $('#dynamicFilters').html(html);
+      attachFilterHandlers();
     }
 
-    function getActiveFilters() {
+    function attachFilterHandlers() {
+      // Field change handler
+      $(document).off('change', '.filter-field').on('change', '.filter-field', function() {
+        const idx = parseInt($(this).data('filter'));
+        const newField = $(this).val();
+        const field = currentFilters.find(f => f.name === newField);
+        
+        if (field) {
+          const operators = getFilterOperators(field);
+          activeFilters[idx].field = newField;
+          activeFilters[idx].operator = operators[0].value;
+          activeFilters[idx].value = '';
+          activeFilters[idx].value1 = '';
+          activeFilters[idx].value2 = '';
+          renderActiveFilters();
+        }
+      });
+
+      // Operator change handler
+      $(document).off('change', '.filter-operator').on('change', '.filter-operator', function() {
+        const idx = parseInt($(this).data('filter'));
+        const operator = $(this).val();
+        const field = $(this).data('field');
+        
+        activeFilters[idx].operator = operator;
+        renderActiveFilters();
+      });
+
+      // Value change handlers
+      $(document).off('change', '.filter-value').on('change', '.filter-value', function() {
+        const idx = parseInt($(this).data('filter'));
+        activeFilters[idx].value = $(this).val();
+      });
+      
+      $(document).off('change', '.filter-value-from').on('change', '.filter-value-from', function() {
+        const idx = parseInt($(this).data('filter'));
+        activeFilters[idx].value1 = $(this).val();
+      });
+      
+      $(document).off('change', '.filter-value-to').on('change', '.filter-value-to', function() {
+        const idx = parseInt($(this).data('filter'));
+        activeFilters[idx].value2 = $(this).val();
+      });
+
+      // Remove filter handler
+      $(document).off('click', '.btn-remove-filter').on('click', '.btn-remove-filter', function(e) {
+        e.preventDefault();
+        const idx = parseInt($(this).data('filter'));
+        activeFilters.splice(idx, 1);
+        renderActiveFilters();
+      });
+    }
+
+    function getActiveFiltersParams() {
       const params = { model: currentModel };
       if (table) {
         const searchValue = table.search(); 
@@ -179,12 +344,21 @@
         }
       }
       
-      // Get dynamic filter values
-      $('#dynamicFilters input, #dynamicFilters select').each(function() {
-        const val = $(this).val();
-        const param = $(this).data('param');
-        if (val && param) {
-          params[param] = val;
+      // Get user-defined filter values
+      activeFilters.forEach((filter, idx) => {
+        if (!filter.field || !filter.value) return;
+        
+        if (filter.operator === 'range' && filter.value1 && filter.value2) {
+          params[filter.field + '__gte'] = filter.value1;
+          params[filter.field + '__lte'] = filter.value2;
+        } else if (filter.operator === 'range') {
+          // Range with missing values, skip
+          return;
+        } else if (filter.operator === 'exact') {
+          params[filter.field] = filter.value;
+        } else {
+          // Use Django ORM-style lookups
+          params[filter.field + '__' + filter.operator] = filter.value;
         }
       });
       
@@ -267,7 +441,7 @@
                 const orderDir = d.order[0].dir === 'asc' ? '' : '-'; 
                 params.ordering = orderDir + orderColumn.data; 
               }
-              const extra = getActiveFilters(); 
+              const extra = getActiveFiltersParams(); 
               Object.assign(params, extra);
               return params;
             },
@@ -367,17 +541,46 @@
 
     // Initialize with default model
     loadFilters(function() {
-      renderFilters();
+      renderActiveFilters();
       loadColumns();
     });
 
     // Model selector change handler
     $('#modelSelect').change(function() {
       currentModel = $(this).val();
+      activeFilters = []; // Reset filters when model changes
       loadFilters(function() {
-        renderFilters();
+        renderActiveFilters();
         loadColumns();
       });
+    });
+
+    // Add filter button handler
+    $('#addFilterBtn').click(function() {
+      if (currentFilters.length === 0) {
+        alert('No filters available for this model');
+        return;
+      }
+      
+      // Add new filter with first available field
+      const firstField = currentFilters[0];
+      const operators = getFilterOperators(firstField);
+      
+      activeFilters.push({
+        field: firstField.name,
+        operator: operators[0].value,
+        value: '',
+        value1: '',
+        value2: ''
+      });
+      
+      renderActiveFilters();
+    });
+
+    // Remove all filters button handler
+    $('#removeAllFiltersBtn').click(function() {
+      activeFilters = [];
+      renderActiveFilters();
     });
 
     $('#toggleColumnsBtn').click(function() { 
@@ -390,14 +593,15 @@
     });
     
     $('#clearFilters').click(function() { 
-      $('#dynamicFilters input, #dynamicFilters select').val(''); 
+      activeFilters = [];
+      renderActiveFilters();
       if (table) { 
         table.search('').draw(); 
       } 
     });
     
     $('#exportData').click(function() { 
-      const filters = getActiveFilters(); 
+      const filters = getActiveFiltersParams(); 
       const saved = localStorage.getItem(getStorageKey('visibleColumns')); 
       const visibleColumns = saved ? JSON.parse(saved) : (defaultColumns[currentModel] || []); 
       const params = new URLSearchParams(); 
@@ -413,7 +617,7 @@
       setTimeout(()=>$(this).text(orig).prop('disabled',false),2000); 
     });
     
-    $('#dynamicFilters').on('keypress', 'input', function(e){ 
+    $(document).on('keypress', '.filter-value', function(e){ 
       if (e.which===13) $('#applyFilters').click(); 
     });
   });

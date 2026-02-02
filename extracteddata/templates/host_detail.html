@@ -34,8 +34,8 @@
     <p>No pathogen records.</p>
   {% endif %}
 
-  <h4>Sequences</h4>
   {% if sequences %}
+  <h4>Sequences</h4>
     <ul>
       {% for s in sequences %}
         <li>
@@ -46,8 +46,6 @@
         </li>
       {% endfor %}
     </ul>
-  {% else %}
-    <p>No sequence records for this host.</p>
   {% endif %}
 </div>
 {% endblock %}
