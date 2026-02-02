@@ -354,10 +354,8 @@
         } else if (filter.operator === 'range') {
           // Range with missing values, skip
           return;
-        } else if (filter.operator === 'exact') {
-          params[filter.field] = filter.value;
         } else {
-          // Use Django ORM-style lookups
+          // Use Django ORM-style lookups for all operators (including exact)
           params[filter.field + '__' + filter.operator] = filter.value;
         }
       });
