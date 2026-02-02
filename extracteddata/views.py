@@ -403,6 +403,9 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
             field_name = f"{prefix}{field.name}"
             field_type = type(field).__name__
             
+            # Generate label with > separator for nested fields (matching columns function)
+            field_label = field_name.replace('__', ' > ').replace('_', ' ').title()
+            
             # Determine filter configuration based on field type
             filter_config = None
             
@@ -410,7 +413,7 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
             if isinstance(field, (django_models.CharField, django_models.TextField)):
                 filter_config = {
                     'name': field_name,
-                    'label': field.verbose_name.title() if hasattr(field, 'verbose_name') else field.name.replace('_', ' ').title(),
+                    'label': field_label,
                     'type': 'text',
                     'filter_type': 'icontains',
                 }
@@ -420,7 +423,7 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
                                    django_models.DecimalField, django_models.PositiveIntegerField)):
                 filter_config = {
                     'name': field_name,
-                    'label': field.verbose_name.title() if hasattr(field, 'verbose_name') else field.name.replace('_', ' ').title(),
+                    'label': field_label,
                     'type': 'number',
                     'filter_type': 'range',  # Supports __gte and __lte
                 }
@@ -429,7 +432,7 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
             elif isinstance(field, (django_models.DateField, django_models.DateTimeField)):
                 filter_config = {
                     'name': field_name,
-                    'label': field.verbose_name.title() if hasattr(field, 'verbose_name') else field.name.replace('_', ' ').title(),
+                    'label': field_label,
                     'type': 'date',
                     'filter_type': 'range',  # Supports __gte and __lte
                 }
@@ -438,7 +441,7 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
             elif isinstance(field, django_models.BooleanField):
                 filter_config = {
                     'name': field_name,
-                    'label': field.verbose_name.title() if hasattr(field, 'verbose_name') else field.name.replace('_', ' ').title(),
+                    'label': field_label,
                     'type': 'boolean',
                     'filter_type': 'exact',
                 }
