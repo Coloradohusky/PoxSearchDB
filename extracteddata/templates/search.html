@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Unified Database Search{% endblock %}
+{% block title %}Database Search{% endblock %}
 {% block content %}
 <!DOCTYPE html>
 <html lang="en">
@@ -21,7 +21,7 @@
   </style>
 </head>
 <body>
-  <h1>Unified Database Search</h1>
+  <h1>Database Search</h1>
 
   <!-- Model Selector -->
   <div class="model-selector">
@@ -112,7 +112,16 @@
       const relevantFilters = currentFilters.filter(f => {
         // Include only top-level fields and first-level related fields
         const depth = (f.name.match(/__/g) || []).length;
-        return depth <= 1;
+        if (depth > 1) return false;
+
+        // Exclude model ID fields (id, pk, original_id, and related *_id/*__id/*__pk)
+        const name = (f.name || '').toLowerCase();
+        const isIdField = (
+          name === 'id' ||
+          name === 'pk' ||
+          name === 'original_id'
+        );
+        return !isIdField;
       }).slice(0, MAX_VISIBLE_FILTERS);
 
       const html = relevantFilters.map(f => {
