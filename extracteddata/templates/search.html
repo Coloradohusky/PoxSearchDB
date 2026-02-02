@@ -117,9 +117,9 @@
         // Exclude model ID fields (id, pk, original_id, and related *_id/*__id/*__pk)
         const name = (f.name || '').toLowerCase();
         const isIdField = (
-          name === 'id' ||
-          name === 'pk' ||
-          name === 'original_id'
+          name.endsWith('_id') ||
+          name.endsWith('_pk') ||
+          name.endsWith('_original_id')
         );
         return !isIdField;
       }).slice(0, MAX_VISIBLE_FILTERS);
