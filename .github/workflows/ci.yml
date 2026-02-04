@@ -56,30 +56,19 @@ jobs:
         run: |
           python manage.py migrate --noinput
 
-      - name: Debug import environment
+      - name: Run tests with coverage
         run: |
-          python - <<'PY'
-          import sys, importlib
-          print('--- sys.path ---')
-          for p in sys.path:
-              print(p)
-          print('--- tests in sys.modules ---')
-          if 'tests' in sys.modules:
-              m = sys.modules['tests']
-              print('tests module:', repr(m))
-              print('file:', getattr(m, '__file__', None))
-          else:
-              print('tests not in sys.modules')
-          # show extracteddata.tests resolution
-          try:
-              mod = importlib.import_module('extracteddata.tests')
-              print('extracteddata.tests ->', getattr(mod, '__file__', None))
-          except Exception as e:
-              print('could not import extracteddata.tests:', e)
-          PY
+          pytest -v --cov=extracteddata --cov-report=xml --cov-report=term --cov-report=html
 
-      - name: Run tests (target extracteddata app)
-        run: |
-          # Run tests for the extracteddata app explicitly to avoid
-          # potential import-name collisions with a top-level `tests` module.
-          python manage.py test extracteddata --verbosity=2
+      - name: Upload coverage to GitHub
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+          
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ github.token }}

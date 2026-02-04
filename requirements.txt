@@ -14,3 +14,6 @@ pygbif>=0.6.6
 vcrpy>=8.1.0
 folium
 xyzservices
+pytest
+pytest-django
+pytest-cov
