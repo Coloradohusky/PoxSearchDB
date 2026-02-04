@@ -11,24 +11,26 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
-import os, dj_database_url
+import os
+import dj_database_url
 from decouple import config
 import sys
-import xyzservices.providers as xyz
+from django.core.exceptions import ImproperlyConfigured
+from django.core.management.utils import get_random_secret_key
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'stream': sys.stdout,
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "stream": sys.stdout,
         },
     },
-    'root': {
-        'handlers': ['console'],
-        'level': 'DEBUG',
+    "root": {
+        "handlers": ["console"],
+        "level": "DEBUG",
     },
 }
 
@@ -51,8 +53,6 @@ DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 # a .env via python-decouple. If still missing, behave as follows:
 #  - in DEBUG mode: generate a random secret key (safe for local/dev only)
 #  - in non-DEBUG (production): raise an error to avoid insecure defaults
-from django.core.exceptions import ImproperlyConfigured
-from django.core.management.utils import get_random_secret_key
 
 SECRET_KEY = os.getenv("SECRET_KEY") or config("SECRET_KEY", default=None)
 
@@ -71,48 +71,47 @@ ALLOWED_HOSTS = ["*"]
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'extracteddata.apps.ExtracteddataConfig',
-    'django.contrib.gis',
-    'leaflet',
-    'rest_framework',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "extracteddata.apps.ExtracteddataConfig",
+    "django.contrib.gis",
+    "leaflet",
+    "rest_framework",
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = 'PoxSearchDB.urls'
+ROOT_URLCONF = "PoxSearchDB.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates']
-        ,
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'PoxSearchDB.wsgi.application'
+WSGI_APPLICATION = "PoxSearchDB.wsgi.application"
 
 
 # Database
@@ -121,8 +120,8 @@ WSGI_APPLICATION = 'PoxSearchDB.wsgi.application'
 DATABASES = {
     "default": dj_database_url.parse(
         os.getenv("DATABASE_URL"),
-        conn_max_age=600,        # persistent connections (important for Render)
-        ssl_require=True
+        conn_max_age=600,  # persistent connections (important for Render)
+        ssl_require=True,
     )
 }
 
@@ -132,11 +131,12 @@ DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 # Passing psycopg2 kwargs like 'sslmode' to other adapters (e.g. psycopg 3)
 # can raise TypeError: Connection() got an unexpected keyword argument 'sslmode'.
 try:
-    import psycopg2  # type: ignore
+    import psycopg2  # type: ignore # noqa
+
     DATABASES["default"]["OPTIONS"] = {
         "sslmode": "require",
         "channel_binding": "require",  # matches Neon's requirements
-        "prepare_threshold": 0,        # required for PgBouncer / pooler
+        "prepare_threshold": 0,  # required for PgBouncer / pooler
     }
 except Exception:
     # psycopg2 not installed (maybe using psycopg 3 or another adapter).
@@ -148,16 +148,16 @@ except Exception:
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -165,9 +165,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -185,7 +185,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
@@ -193,37 +193,37 @@ REST_FRAMEWORK = {
 }
 
 # Redirect users to the site home after login/logout instead of the default /accounts/profile/
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
 
 # Leaflet Map Configuration
 LEAFLET_CONFIG = {
-    'DEFAULT_CENTER': (20.0, 0.0),
-    'DEFAULT_ZOOM': 3,
-    'MIN_ZOOM': 2,
-    'MAX_ZOOM': 18,
-    'TILE_PROVIDERS': {
-        'OpenStreetMap': 'OpenStreetMap.Mapnik',
-        'OpenTopoMap': 'OpenTopoMap',
-        'Esri WorldImagery': 'Esri.WorldImagery',
-        'CartoDB Positron': 'CartoDB.Positron',
+    "DEFAULT_CENTER": (20.0, 0.0),
+    "DEFAULT_ZOOM": 3,
+    "MIN_ZOOM": 2,
+    "MAX_ZOOM": 18,
+    "TILE_PROVIDERS": {
+        "OpenStreetMap": "OpenStreetMap.Mapnik",
+        "OpenTopoMap": "OpenTopoMap",
+        "Esri WorldImagery": "Esri.WorldImagery",
+        "CartoDB Positron": "CartoDB.Positron",
     },
-    'CLUSTER_OPTIONS': {
-        'chunkedLoading': True,
-        'chunkInterval': 200,
-        'chunkDelay': 50,
-        'maxClusterRadius': 80,
-        'spiderfyOnMaxZoom': True,
-        'showCoverageOnHover': False,
-        'zoomToBoundsOnClick': True,
-        'disableClusteringAtZoom': 12
+    "CLUSTER_OPTIONS": {
+        "chunkedLoading": True,
+        "chunkInterval": 200,
+        "chunkDelay": 50,
+        "maxClusterRadius": 80,
+        "spiderfyOnMaxZoom": True,
+        "showCoverageOnHover": False,
+        "zoomToBoundsOnClick": True,
+        "disableClusteringAtZoom": 12,
     },
-    'MARKER_STYLE': {
-        'radius': 6,
-        'fillColor': '#3388ff',
-        'color': '#fff',
-        'weight': 1,
-        'opacity': 1,
-        'fillOpacity': 0.7
-    }
+    "MARKER_STYLE": {
+        "radius": 6,
+        "fillColor": "#3388ff",
+        "color": "#fff",
+        "weight": 1,
+        "opacity": 1,
+        "fillOpacity": 0.7,
+    },
 }
