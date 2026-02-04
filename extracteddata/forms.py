@@ -1,16 +1,14 @@
 # forms.py
 from django import forms
 
+
 class DataUploadForm(forms.Form):
     file_type = forms.ChoiceField(
-        choices=[('csv', 'CSV'), ('excel', 'Excel')],
-        widget=forms.RadioSelect
+        choices=[("csv", "CSV"), ("excel", "Excel")], widget=forms.RadioSelect
     )
-    
+
     log_verbose = forms.BooleanField(
-        required=False,
-        initial=True,
-        label="Enable verbose logging"
+        required=False, initial=True, label="Enable verbose logging"
     )
 
     # CSV fields - one for each model
@@ -25,21 +23,23 @@ class DataUploadForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
-        file_type = cleaned_data.get('file_type')
+        file_type = cleaned_data.get("file_type")
 
-        if file_type == 'csv':
+        if file_type == "csv":
             # Ensure all CSVs are uploaded
-            if not all([
-                cleaned_data.get('inclusion_full_text'),
-                cleaned_data.get('descriptive'),
-                cleaned_data.get('host'),
-                cleaned_data.get('pathogen'),
-                cleaned_data.get('sequences')
-            ]):
+            if not all(
+                [
+                    cleaned_data.get("inclusion_full_text"),
+                    cleaned_data.get("descriptive"),
+                    cleaned_data.get("host"),
+                    cleaned_data.get("pathogen"),
+                    cleaned_data.get("sequences"),
+                ]
+            ):
                 raise forms.ValidationError("Please upload all five CSV files.")
 
-        elif file_type == 'excel':
-            if not cleaned_data.get('excel_file'):
+        elif file_type == "excel":
+            if not cleaned_data.get("excel_file"):
                 raise forms.ValidationError("Please upload an Excel file.")
 
         return cleaned_data

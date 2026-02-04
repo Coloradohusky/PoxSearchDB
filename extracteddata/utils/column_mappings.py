@@ -5,7 +5,7 @@ MODEL_MAP = {
     "descriptive": Descriptive,
     "host": Host,
     "pathogen": Pathogen,
-    "sequence": Sequence
+    "sequence": Sequence,
 }
 
 MODEL_ALIASES = {
@@ -16,11 +16,13 @@ MODEL_ALIASES = {
     "sequences": "sequence",
 }
 
+
 def get_model_for_sheet(sheet_name):
     normalized = sheet_name.lower().strip()
     if normalized in MODEL_ALIASES:
         normalized = MODEL_ALIASES[normalized]
     return MODEL_MAP.get(normalized)
+
 
 COLUMN_ALIASES = {
     "FullText": {
@@ -86,5 +88,5 @@ COLUMN_ALIASES = {
         "date_sampled": ["date_sampled"],
         "sample_location": ["sample_location"],
         "scientific_name": ["scientificName"],
-    }
+    },
 }

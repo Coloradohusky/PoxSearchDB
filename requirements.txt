@@ -17,3 +17,4 @@ xyzservices
 pytest
 pytest-django
 pytest-cov
+ruff

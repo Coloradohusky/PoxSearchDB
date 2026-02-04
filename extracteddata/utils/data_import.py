@@ -10,13 +10,15 @@ import pygbif
 from pygbif import species as _gbif_species
 import logging
 
+
 def log(verbose, msg):
     m = log_message(msg, verbose)
     if m:
         yield m
 
+
 # Enable pygbif API caching only in production (not during tests)
-if not os.environ.get('TESTING', False):
+if not os.environ.get("TESTING", False):
     list(log(True, "Caching enabled for pygbif API"))
     pygbif.caching(True)
 else:
@@ -29,6 +31,7 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("requests_cache").setLevel(logging.WARNING)
 
+
 # More aggressive than normalize_value, used for converting ft_1 to 1
 def clean_value(value, float_to_int=True):
     if pd.isna(value):
@@ -38,7 +41,7 @@ def clean_value(value, float_to_int=True):
     if isinstance(value, float):
         return int(value) if float_to_int else value
     if isinstance(value, str):
-        if value == '':
+        if value == "":
             return None
         value = value.strip()
         if value.isdigit():
@@ -49,12 +52,13 @@ def clean_value(value, float_to_int=True):
         return value
     return None
 
+
 # Simply used for cleaning strings and converting float to int
 def normalize_value(value, float_to_int=True):
     if pd.isna(value):
         return None
     if isinstance(value, str):
-        return ' '.join(value.split()).strip() or None
+        return " ".join(value.split()).strip() or None
     if isinstance(value, (int, float)):
         if float_to_int:
             return int(value)
@@ -68,16 +72,16 @@ def resolve_species_name(name, verbose, min_confidence=85):
         name: The taxonomic name to resolve (string)
         verbose: Boolean flag to enable verbose logging
         min_confidence: Minimum confidence threshold (0-100) for accepting results
-    
+
     Returns:
         str: A canonical name string if resolution succeeds, otherwise None.
-    
+
     Note:
         This function requires the `pygbif` package and network access to GBIF.
     """
     if not name or not isinstance(name, str):
         return None
-    
+
     # Strip whitespace
     name = name.strip()
     if not name:
@@ -87,41 +91,44 @@ def resolve_species_name(name, verbose, min_confidence=85):
 
     try:
         # Try name_backbone first - this is the primary matching service
-        resp = _gbif_species.name_backbone(scientificName = name)
-        
+        resp = _gbif_species.name_backbone(scientificName=name)
+
         if resp and isinstance(resp, dict):
             # Check confidence if available
-            confidence = resp.get('diagnostics', {}).get('confidence', 0)
+            confidence = resp.get("diagnostics", {}).get("confidence", 0)
             # list(log(verbose, f"Confidence '{confidence}'"))
-            
+
             # Only use result if confidence meets threshold
             if confidence >= min_confidence:
                 # Prefer accepted names over synonyms
-                status = resp.get('usage', {}).get('status', '')
-                if status == 'SYNONYM':
+                status = resp.get("usage", {}).get("status", "")
+                if status == "SYNONYM":
                     # If it's a synonym, try to get the accepted name
-                    accepted_key = resp.get('acceptedUsage', {}).get('canonicalName')
+                    accepted_key = resp.get("acceptedUsage", {}).get("canonicalName")
                     if accepted_key:
                         try:
                             accepted_resp = _gbif_species.name_usage(key=accepted_key)
                             if accepted_resp and isinstance(accepted_resp, dict):
-                                canonical = accepted_resp.get('usage', {}).get('canonicalName', name)
+                                canonical = accepted_resp.get("usage", {}).get(
+                                    "canonicalName", name
+                                )
                                 if canonical:
                                     return canonical
                         except Exception:
                             pass
-                
+
                 # Return canonical name from backbone response
-                canonical = resp.get('usage', {}).get('canonicalName', name)
+                canonical = resp.get("usage", {}).get("canonicalName", name)
                 if canonical:
                     return canonical
-                    
+
     except Exception as e:
         list(log(True, f"GBIF lookup error for '{name}': {e}"))
         return name
-    
+
     list(log(True, f"Unable to find match for '{name}'"))
     return name
+
 
 def assign_unique_id(existing_ids, candidate_id=None, start_from=1):
     if candidate_id is None or candidate_id in existing_ids:
@@ -130,6 +137,7 @@ def assign_unique_id(existing_ids, candidate_id=None, start_from=1):
             candidate_id += 1
     existing_ids.add(candidate_id)
     return candidate_id
+
 
 def apply_column_aliases(df, aliases):
     # Normalize existing dataframe columns (strip and lower) to find matches
@@ -149,6 +157,7 @@ def apply_column_aliases(df, aliases):
 
     # Finally normalize all column names to stripped, lower-case canonical form
     df.columns = df.columns.str.strip().str.lower()
+
 
 def make_row_key(row, fields, float_to_int=True):
     def _normalize_latlon(val):
@@ -171,16 +180,20 @@ def make_row_key(row, fields, float_to_int=True):
             except Exception:
                 return v
         return str(val).strip()
+
     return tuple(
-        _normalize_latlon(row.get(f)) if f in ("location_longitude", "location_latitude")
+        _normalize_latlon(row.get(f))
+        if f in ("location_longitude", "location_latitude")
         else normalize_value(row.get(f), float_to_int=float_to_int)
         for f in fields
     )
+
 
 def handle_csv_upload(file, sheet_name, id_mapping, verbose):
     df = pd.read_csv(file, dtype=str, keep_default_na=False).dropna(how="all")
     df.columns = df.columns.str.strip().str.lower()
     yield from handle_upload(df, sheet_name, id_mapping, verbose)
+
 
 def handle_excel_upload(file, id_mapping, verbose):
     xls = pd.ExcelFile(file)
@@ -189,10 +202,13 @@ def handle_excel_upload(file, id_mapping, verbose):
         if not model_class:
             yield from log(verbose, f"Error: Unknown sheet {sheet_name}")
             return
-        df = pd.read_excel(xls, sheet_name=sheet_name, dtype=str, keep_default_na=False).dropna(how="all")
+        df = pd.read_excel(
+            xls, sheet_name=sheet_name, dtype=str, keep_default_na=False
+        ).dropna(how="all")
         df.columns = df.columns.str.strip().str.lower()
         yield from log(verbose, f"Processing sheet: {sheet_name} ({len(df)} rows)")
         yield from handle_upload(df, sheet_name, id_mapping, verbose)
+
 
 # Set up importer function lambdas
 IMPORTERS = {
@@ -203,18 +219,20 @@ IMPORTERS = {
     "sequence": lambda df, id_mapping, v: import_sequence(df, id_mapping, v),
 }
 
+
 # Based on lambda, upload defined sheet
 def handle_upload(df, sheet_name, id_mapping, verbose):
     normalized_name = sheet_name.lower().strip()
     if normalized_name in MODEL_ALIASES:
         normalized_name = MODEL_ALIASES[normalized_name]
-    
+
     importer = IMPORTERS.get(normalized_name)
     if not importer:
         yield from log(True, f"Unknown sheet: {sheet_name}")
         return
     yield from log(True, f"Importing {sheet_name}...")
     yield from importer(df, id_mapping, verbose)
+
 
 """
     Generic import function for Django models.
@@ -233,20 +251,22 @@ def handle_upload(df, sheet_name, id_mapping, verbose):
         foreign_key_validator: Optional function that validates foreign key fields based on criteria
         verbose: Whether to log verbose messages
 """
+
+
 def import_data(
-        df,
-        model_class,
-        id_mapping_key,
-        id_mapping,
-        column_alias_key,
-        dedup_fields,
-        dedup_with_self,
-        field_mapping,
-        required_fields=None,
-        foreign_key_resolver=None,
-        foreign_key_validator=None,
-        verbose=False,
-        chunk_size=None,
+    df,
+    model_class,
+    id_mapping_key,
+    id_mapping,
+    column_alias_key,
+    dedup_fields,
+    dedup_with_self,
+    field_mapping,
+    required_fields=None,
+    foreign_key_resolver=None,
+    foreign_key_validator=None,
+    verbose=False,
+    chunk_size=None,
 ):
     # Preparation for importing
     apply_column_aliases(df, COLUMN_ALIASES[column_alias_key])
@@ -257,8 +277,7 @@ def import_data(
     existing_data = list(model_class.objects.values(*fetch_fields))
 
     existing_keys = {
-        make_row_key(obj, dedup_fields, float_to_int=True)
-        for obj in existing_data
+        make_row_key(obj, dedup_fields, float_to_int=True) for obj in existing_data
     }
 
     key_to_id = {
@@ -270,6 +289,7 @@ def import_data(
 
     objects = []
     inserted_count = 0
+
     # Function for committing accumulated objects to the database
     def flush_objects():
         nonlocal objects, inserted_count
@@ -281,6 +301,7 @@ def import_data(
             model_class.objects.bulk_create(objects, **kwargs)
         inserted_count += len(objects)
         objects = []
+
     batch_keys = set()
 
     # Iterate over each row, apply functions when necessary
@@ -291,7 +312,9 @@ def import_data(
         for field in required_fields:
             value = normalize_value(row.get(field))
             if not value:
-                yield from log(True, f"Skipped row with missing {field} (row={str(row.to_list())})")
+                yield from log(
+                    True, f"Skipped row with missing {field} (row={str(row.to_list())})"
+                )
                 skip = True
                 break
         if skip:
@@ -307,14 +330,19 @@ def import_data(
 
             # Run custom validation if provided
             if foreign_key_validator:
-                should_skip, log_messages = foreign_key_validator(row, fk_fields, original_id)
+                should_skip, log_messages = foreign_key_validator(
+                    row, fk_fields, original_id
+                )
                 yield from log_messages
                 if should_skip:
                     continue
             else:
                 # Default behavior: check if any required foreign keys are None
                 if any(v is None for v in fk_fields.values()):
-                    yield from log(True, f"Skipped: Missing foreign key for row={str(row.to_list())})")
+                    yield from log(
+                        True,
+                        f"Skipped: Missing foreign key for row={str(row.to_list())})",
+                    )
                     continue
             obj_fields.update(fk_fields)
 
@@ -340,7 +368,11 @@ def import_data(
                         v = None
                 # Fallback to raw row value if available
                 if v is None:
-                    v = row.get(f) if f in row.index or isinstance(row, dict) else row.get(base)
+                    v = (
+                        row.get(f)
+                        if f in row.index or isinstance(row, dict)
+                        else row.get(base)
+                    )
                 key_source[f] = v
             else:
                 # For non-nested fields, use processed value from obj_fields if available
@@ -367,13 +399,16 @@ def import_data(
             else:
                 id_mapping[id_mapping_key][original_id] = existing_id
 
-            yield from log(verbose,
-                           f"Mapped duplicate {model_class.__name__} ID {original_id} → existing {existing_id}")
+            yield from log(
+                verbose,
+                f"Mapped duplicate {model_class.__name__} ID {original_id} → existing {existing_id}",
+            )
             continue
 
         if dedup_with_self and key in batch_keys:
-            yield from log(verbose,
-                           f"Skipped duplicate within import batch: {original_id}")
+            yield from log(
+                verbose, f"Skipped duplicate within import batch: {original_id}"
+            )
             continue
 
         # Assign ID
@@ -392,14 +427,16 @@ def import_data(
 
         id_mapping[id_mapping_key][original_id] = clean_id
 
-
         objects.append(model_class(**obj_fields))
 
         if chunk_size and len(objects) >= chunk_size:
             flush_objects()
 
     flush_objects()
-    yield from log(True, f"Inserted {inserted_count} new {model_class.__name__} records.")
+    yield from log(
+        True, f"Inserted {inserted_count} new {model_class.__name__} records."
+    )
+
 
 # Specific import functions for each sheet, as shown in IMPORTERS
 def import_fulltext(df, id_mapping, verbose):
@@ -410,7 +447,9 @@ def import_fulltext(df, id_mapping, verbose):
         "key": lambda row: normalize_value(row.get("key")),
         "extractor": lambda row: normalize_value(row.get("extractor")),
         "community": lambda row: normalize_value(row.get("community")),
-        "spatio_temporal_extraction": lambda row: normalize_value(row.get("spatio_temporal_extraction")),
+        "spatio_temporal_extraction": lambda row: normalize_value(
+            row.get("spatio_temporal_extraction")
+        ),
         "decision": lambda row: normalize_value(row.get("decision")),
         "reason": lambda row: normalize_value(row.get("reason")),
         "processed": lambda row: bool(row.get("processed", False)),
@@ -430,6 +469,7 @@ def import_fulltext(df, id_mapping, verbose):
         chunk_size=None,
     )
 
+
 def import_descriptive(df, id_mapping, verbose):
     fulltexts = FullText.objects.in_bulk(FullText.objects.values_list("id", flat=True))
 
@@ -443,7 +483,9 @@ def import_descriptive(df, id_mapping, verbose):
         "sampling_effort": lambda row: normalize_value(row.get("sampling_effort")),
         "data_access": lambda row: normalize_value(row.get("data_access")),
         "data_resolution": lambda row: normalize_value(row.get("data_resolution")),
-        "linked_manuscripts": lambda row: normalize_value(row.get("linked_manuscripts")),
+        "linked_manuscripts": lambda row: normalize_value(
+            row.get("linked_manuscripts")
+        ),
         "notes": lambda row: normalize_value(row.get("notes")),
     }
 
@@ -462,8 +504,11 @@ def import_descriptive(df, id_mapping, verbose):
         chunk_size=None,
     )
 
+
 def import_host(df, id_mapping, verbose):
-    studies = Descriptive.objects.in_bulk(Descriptive.objects.values_list("id", flat=True))
+    studies = Descriptive.objects.in_bulk(
+        Descriptive.objects.values_list("id", flat=True)
+    )
 
     def get_study(row):
         study_val = row.get("study")
@@ -473,17 +518,27 @@ def import_host(df, id_mapping, verbose):
         return None
 
     field_mapping = {
-        "scientific_name": lambda row: resolve_species_name(row.get("scientific_name"), verbose),
+        "scientific_name": lambda row: resolve_species_name(
+            row.get("scientific_name"), verbose
+        ),
         "event_date": lambda row: normalize_value(row.get("event_date")),
         "locality": lambda row: normalize_value(row.get("locality")),
         "country": lambda row: normalize_value(row.get("country")),
         "verbatim_locality": lambda row: normalize_value(row.get("verbatim_locality")),
-        "coordinate_resolution": lambda row: normalize_value(row.get("coordinate_resolution")),
-        "location_latitude": lambda row: clean_value(row.get("location_latitude"), float_to_int=False),
-        "location_longitude": lambda row: clean_value(row.get("location_longitude"), float_to_int=False),
+        "coordinate_resolution": lambda row: normalize_value(
+            row.get("coordinate_resolution")
+        ),
+        "location_latitude": lambda row: clean_value(
+            row.get("location_latitude"), float_to_int=False
+        ),
+        "location_longitude": lambda row: clean_value(
+            row.get("location_longitude"), float_to_int=False
+        ),
         "individual_count": lambda row: clean_value(row.get("individual_count")),
         "trap_effort": lambda row: normalize_value(row.get("trap_effort")),
-        "trap_effort_resolution": lambda row: normalize_value(row.get("trap_effort_resolution")),
+        "trap_effort_resolution": lambda row: normalize_value(
+            row.get("trap_effort_resolution")
+        ),
     }
 
     yield from import_data(
@@ -493,9 +548,15 @@ def import_host(df, id_mapping, verbose):
         id_mapping=id_mapping,
         column_alias_key="Host",
         dedup_fields=[
-            "scientific_name", "event_date", "locality", "country", "verbatim_locality",
-            "coordinate_resolution", "location_latitude", "location_longitude",
-            "individual_count"
+            "scientific_name",
+            "event_date",
+            "locality",
+            "country",
+            "verbatim_locality",
+            "coordinate_resolution",
+            "location_latitude",
+            "location_longitude",
+            "individual_count",
         ],
         dedup_with_self=False,
         field_mapping=field_mapping,
@@ -504,6 +565,7 @@ def import_host(df, id_mapping, verbose):
         foreign_key_resolver=lambda row: {"study": get_study(row)},
         chunk_size=100,
     )
+
 
 def import_pathogen(df, id_mapping, verbose):
     hosts = Host.objects.in_bulk(Host.objects.values_list("id", flat=True))
@@ -517,7 +579,9 @@ def import_pathogen(df, id_mapping, verbose):
 
     field_mapping = {
         "family": lambda row: normalize_value(row.get("family")),
-        "scientific_name": lambda row: resolve_species_name(row.get("scientific_name"), verbose),
+        "scientific_name": lambda row: resolve_species_name(
+            row.get("scientific_name"), verbose
+        ),
         "assay": lambda row: normalize_value(row.get("assay")),
         "tested": lambda row: clean_value(row.get("tested")),
         "positive": lambda row: clean_value(row.get("positive")),
@@ -533,7 +597,16 @@ def import_pathogen(df, id_mapping, verbose):
         id_mapping=id_mapping,
         column_alias_key="Pathogen",
         # include related host scientific name in dedup checks (host__scientific_name)
-        dedup_fields=["family", "scientific_name", "assay", "tested", "positive", "negative", "number_inconclusive", "host__scientific_name"],
+        dedup_fields=[
+            "family",
+            "scientific_name",
+            "assay",
+            "tested",
+            "positive",
+            "negative",
+            "number_inconclusive",
+            "host__scientific_name",
+        ],
         dedup_with_self=False,
         field_mapping=field_mapping,
         required_fields=[],
@@ -542,10 +615,13 @@ def import_pathogen(df, id_mapping, verbose):
         chunk_size=100,
     )
 
+
 def import_sequence(df, id_mapping, verbose):
     hosts = Host.objects.in_bulk(Host.objects.values_list("id", flat=True))
     pathogens = Pathogen.objects.in_bulk(Pathogen.objects.values_list("id", flat=True))
-    studies = Descriptive.objects.in_bulk(Descriptive.objects.values_list("id", flat=True))
+    studies = Descriptive.objects.in_bulk(
+        Descriptive.objects.values_list("id", flat=True)
+    )
 
     def get_host(row):
         host_val = row.get("host")
@@ -595,7 +671,9 @@ def import_sequence(df, id_mapping, verbose):
         candidate_study = get_study(row)
 
         # Use normalize_value without float->int conversion to get a safe string
-        sequence_type = normalize_value(row.get("sequence_type"), float_to_int=False) or ""
+        sequence_type = (
+            normalize_value(row.get("sequence_type"), float_to_int=False) or ""
+        )
         sequence_type = sequence_type.strip().lower()
 
         # Start with no selection
@@ -607,12 +685,15 @@ def import_sequence(df, id_mapping, verbose):
             fk["host"] = candidate_host
 
         assoc_taxa = normalize_value(row.get("associated_taxa"), float_to_int=False)
-        if assoc_taxa and isinstance(assoc_taxa, str) and assoc_taxa.strip().lower() == "homo sapiens":
+        if (
+            assoc_taxa
+            and isinstance(assoc_taxa, str)
+            and assoc_taxa.strip().lower() == "homo sapiens"
+        ):
             # study takes precedence — set study and clear other FKs
             fk = {"host": None, "pathogen": None, "study": candidate_study}
 
         return fk
-
 
     def validate_sequence_fks(row, fk_fields, original_id):
         """Returns (should_skip, log_generator).
@@ -627,35 +708,51 @@ def import_sequence(df, id_mapping, verbose):
         pathogen_obj = fk_fields.get("pathogen")
         study_obj = fk_fields.get("study")
 
-        sequence_type = normalize_value(row.get("sequence_type"), float_to_int=False) or ""
+        sequence_type = (
+            normalize_value(row.get("sequence_type"), float_to_int=False) or ""
+        )
         sequence_type = sequence_type.strip().lower()
 
         assoc_taxa = normalize_value(row.get("associated_taxa"), float_to_int=False)
 
         # If associatedTaxa is Homo sapiens, require study
-        if assoc_taxa and isinstance(assoc_taxa, str) and assoc_taxa.strip().lower() == "homo sapiens":
+        if (
+            assoc_taxa
+            and isinstance(assoc_taxa, str)
+            and assoc_taxa.strip().lower() == "homo sapiens"
+        ):
             if not study_obj:
-                return True, log(verbose, f"Skipped: associatedTaxa is 'Homo sapiens' but study {row.get('study')} not found for sequence {original_id}")
+                return True, log(
+                    verbose,
+                    f"Skipped: associatedTaxa is 'Homo sapiens' but study {row.get('study')} not found for sequence {original_id}",
+                )
             return False, ()
 
         # If sequence is pathogen type, require pathogen
         if sequence_type == "pathogen":
             if not pathogen_obj:
-                return True, log(verbose, f"Skipped: Pathogen {row.get('pathogen')} not found for sequence {original_id}")
+                return True, log(
+                    verbose,
+                    f"Skipped: Pathogen {row.get('pathogen')} not found for sequence {original_id}",
+                )
             return False, ()
 
         # If sequence is host type, prefer host but only warn if missing
         if sequence_type == "host":
             if not host_obj:
-                return False, log(verbose, f"Warning: Host {row.get('host')} not found for host sequence {original_id}")
+                return False, log(
+                    verbose,
+                    f"Warning: Host {row.get('host')} not found for host sequence {original_id}",
+                )
             return False, ()
 
         # Fallback: ensure at least one FK exists
         if not pathogen_obj and not host_obj and not study_obj:
-            return True, log(verbose, f"Skipped: No host, pathogen, or study found for sequence {original_id}")
+            return True, log(
+                verbose,
+                f"Skipped: No host, pathogen, or study found for sequence {original_id}",
+            )
 
-        # Otherwise accept and log which one we mapped (prefer pathogen then host then study if present)
-        mapped = pathogen_obj or host_obj or study_obj
         return False, ()
 
     field_mapping = {

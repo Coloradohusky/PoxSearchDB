@@ -2,31 +2,36 @@ from rest_framework import serializers
 
 from .models import FullText, Descriptive, Host, Pathogen, Sequence
 
+
 class FullTextSerializer(serializers.ModelSerializer):
     class Meta:
         model = FullText
-        fields = '__all__'
+        fields = "__all__"
+
 
 class DescriptiveSerializer(serializers.ModelSerializer):
     full_text = FullTextSerializer(read_only=True)
 
     class Meta:
         model = Descriptive
-        fields = '__all__'
+        fields = "__all__"
+
 
 class HostSerializer(serializers.ModelSerializer):
     study = DescriptiveSerializer(read_only=True)
 
     class Meta:
         model = Host
-        fields = '__all__'
+        fields = "__all__"
+
 
 class PathogenSerializer(serializers.ModelSerializer):
     associated_host_record = HostSerializer(read_only=True)
 
     class Meta:
         model = Pathogen
-        fields = '__all__'
+        fields = "__all__"
+
 
 class SequenceSerializer(serializers.ModelSerializer):
     associated_pathogen_record = PathogenSerializer(read_only=True)
@@ -35,13 +40,15 @@ class SequenceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Sequence
-        fields = '__all__'
+        fields = "__all__"
+
 
 class AutoFlattenSerializer(serializers.Serializer):
     """
     Dynamically flattens any Django model instance into a flat dictionary.
     Works with any model, not just Pathogen.
     """
+
     def to_representation(self, instance):
         flat = {}
 
