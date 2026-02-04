@@ -2,7 +2,7 @@ from extracteddata.models import Descriptive, FullText, Host, Pathogen, Sequence
 from extracteddata.serializers import AutoFlattenSerializer
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.db.models import Q, CharField, TextField
 import csv
 import sys
@@ -363,27 +363,43 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
             col.strip() for col in columns_param.split(",") if col.strip()
         ]
 
-        # Serialize all rows
-        rows = [self.get_serializer(obj).data for obj in queryset]
-        if not rows:
-            return HttpResponse("No data", content_type="text/plain")
+        def row_iterator():
+            # Use iterator() to avoid caching the whole queryset
+            for obj in queryset.iterator():
+                row = self.get_serializer(obj).data
+                if requested_columns:
+                    yield {key: row.get(key, "") for key in requested_columns}
+                else:
+                    yield row
 
-        # Filter to only requested columns if specified
-        if requested_columns:
-            filtered_rows = []
-            for row in rows:
-                filtered_row = {
-                    key: value for key, value in row.items() if key in requested_columns
-                }
-                filtered_rows.append(filtered_row)
-            rows = filtered_rows
-            fieldnames = requested_columns
-        else:
-            fieldnames = rows[0].keys()
+        def csv_stream():
+            iterator = row_iterator()
+            first_row = next(iterator, None)
+            if first_row is None:
+                return
 
-        response = HttpResponse(content_type="text/csv")
+            # Determine fieldnames from requested columns or first row
+            if requested_columns:
+                fieldnames = requested_columns
+            else:
+                fieldnames = list(first_row.keys())
+
+            # Write header
+            yield ",".join(fieldnames) + "\n"
+
+            def row_to_csv(row):
+                from io import StringIO
+
+                buffer = StringIO()
+                writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+                writer.writerow(row)
+                return buffer.getvalue()
+
+            # Write first row, then rest
+            yield row_to_csv(first_row)
+            for row in iterator:
+                yield row_to_csv(row)
+
+        response = StreamingHttpResponse(csv_stream(), content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="results.csv"'
-        writer = csv.DictWriter(response, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
         return response

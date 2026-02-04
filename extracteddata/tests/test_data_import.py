@@ -305,7 +305,7 @@ class ExcelImportTests(TestCase):
         path = models.Pathogen.objects.filter(scientific_name="Wenzhou virus").first()
         self.assertEqual(seqc.pathogen.id, path.id)
 
-        # Test duplication handling
+        # Test duplication handling when file is uploaded twice
         with open(test_xlsx_path, "rb") as fh:
             logs = list(di.handle_excel_upload(fh, id_mapping, verbose=True))
 
