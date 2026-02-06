@@ -44,7 +44,8 @@ class SequenceSerializer(serializers.ModelSerializer):
 
 
 class AutoFlattenSerializer(serializers.Serializer):
-    """Dynamically flattens any Django model instance into a flat dictionary.
+    """
+    Dynamically flattens any Django model instance into a flat dictionary.
     Works with any model, not just Pathogen.
     """
 

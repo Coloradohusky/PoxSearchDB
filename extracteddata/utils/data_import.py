@@ -13,6 +13,7 @@ from .column_mappings import COLUMN_ALIASES, MODEL_ALIASES, get_model_for_sheet
 from .logging import log_message
 
 
+# Allows for live output through the web interface
 def log(verbose, msg):
     m = log_message(msg, verbose)
     if m:
@@ -68,7 +69,8 @@ def normalize_value(value, float_to_int=True):
 
 
 def resolve_species_name(name, verbose, min_confidence=85):
-    """Attempt to resolve a taxonomic name to an accepted/canonical name using GBIF.
+    """
+    Attempt to resolve a taxonomic name to an accepted/canonical name using GBIF.
 
     Args:
         name: The taxonomic name to resolve (string)
@@ -342,14 +344,13 @@ def import_data(
                 yield from log_messages
                 if should_skip:
                     continue
-            else:
-                # Default behavior: check if any required foreign keys are None
-                if any(v is None for v in fk_fields.values()):
-                    yield from log(
-                        True,
-                        f"Skipped: Missing foreign key for row={str(row.to_list())})",
-                    )
-                    continue
+            # Default behavior: check if any required foreign keys are None
+            elif any(v is None for v in fk_fields.values()):
+                yield from log(
+                    True,
+                    f"Skipped: Missing foreign key for row={str(row.to_list())})",
+                )
+                continue
             obj_fields.update(fk_fields)
 
         # Add regular fields
@@ -380,13 +381,12 @@ def import_data(
                         else row.get(base)
                     )
                 key_source[f] = v
+            # For non-nested fields, use processed value from obj_fields if available
+            # (this ensures canonicalized species names, normalized strings, etc.)
+            elif f in obj_fields:
+                key_source[f] = obj_fields[f]
             else:
-                # For non-nested fields, use processed value from obj_fields if available
-                # (this ensures canonicalized species names, normalized strings, etc.)
-                if f in obj_fields:
-                    key_source[f] = obj_fields[f]
-                else:
-                    key_source[f] = row.get(f)
+                key_source[f] = row.get(f)
 
         key = make_row_key(key_source, dedup_fields, verbose)
 
@@ -660,7 +660,8 @@ def import_sequence(df, id_mapping, verbose):
         return None
 
     def resolve_sequence_fks(row):
-        """Return a dict with exactly one of 'host', 'pathogen', 'study' set (or all None).
+        """
+        Return a dict with exactly one of 'host', 'pathogen', 'study' set (or all None).
 
         Rules implemented:
         - If sequence_type == 'pathogen' (case-insensitive) -> attempt to set 'pathogen'
@@ -702,7 +703,8 @@ def import_sequence(df, id_mapping, verbose):
         return fk
 
     def validate_sequence_fks(row, fk_fields, original_id):
-        """Returns (should_skip, log_generator).
+        """
+        Returns (should_skip, log_generator).
 
         Validation enforces that exactly one FK is present (non-None) according to rules:
         - If associatedTaxa is Homo sapiens, study must be present.
@@ -773,7 +775,8 @@ def import_sequence(df, id_mapping, verbose):
     }
 
     def _parse_date_sampled(val):
-        """Parse a variety of input date values and return YYYY-MM-DD or None.
+        """
+        Parse a variety of input date values and return YYYY-MM-DD or None.
 
         Accepts strings like '2020-01-02', '01/02/2020', pandas Timestamp, or numeric values.
         """

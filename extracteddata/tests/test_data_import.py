@@ -3,8 +3,8 @@ import os
 # Set TESTING environment variable BEFORE importing data_import to disable pygbif caching
 os.environ["TESTING"] = "True"
 
-import unittest.mock as mock
 from types import SimpleNamespace
+from unittest import mock
 
 import pandas as pd
 import vcr
@@ -66,7 +66,8 @@ class DataImportUtilsTests(SimpleTestCase):
 
 
 class DataImportModelLinkageTests(TestCase):
-    """Integration-style tests to ensure foreign-key linkages work when IDs are
+    """
+    Integration-style tests to ensure foreign-key linkages work when IDs are
     reassigned by assign_unique_id during import.
 
     Scenario covered:
@@ -234,7 +235,8 @@ class SequenceModelTests(SimpleTestCase):
 
 
 class ExcelImportTests(TestCase):
-    """Integration test: build an in-memory Excel file with one row each
+    """
+    Integration test: build an in-memory Excel file with one row each
     for FullText, Descriptive, Host, and Pathogen, then run the
     Excel handler to import them and verify DB objects and id_mapping.
     Also tests duplicate import handling.

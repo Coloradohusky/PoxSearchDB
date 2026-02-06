@@ -56,7 +56,8 @@ def _build_tiles_from_config():
 
 
 def get_map_config():
-    """Returns map configuration from Django settings.
+    """
+    Returns map configuration from Django settings.
     This centralizes all map settings in Python instead of hardcoding in HTML/JS.
     """
     config = getattr(settings, "LEAFLET_CONFIG", {})
@@ -343,7 +344,8 @@ def sequence_detail(request, pk):
 
 
 def _build_search_query(search_value, model, max_depth=2):
-    """Build a search query that searches across all text fields in a model.
+    """
+    Build a search query that searches across all text fields in a model.
     Note: max_depth is 2 to match _get_filterable_fields for consistency.
     """
 
@@ -392,7 +394,8 @@ def _build_search_query(search_value, model, max_depth=2):
 
 # API endpoint to return GeoJSON data for all hosts
 def host_geojson_api(request):
-    """Returns GeoJSON of all host locations for client-side rendering.
+    """
+    Returns GeoJSON of all host locations for client-side rendering.
     Can handle 100k+ records efficiently.
     """
     # Check cache first (cache for 1 hour)
@@ -451,7 +454,8 @@ def host_geojson_api(request):
 
 # Map view - renders client-side Leaflet map
 def map(request):
-    """Renders a Leaflet map that loads GeoJSON via AJAX.
+    """
+    Renders a Leaflet map that loads GeoJSON via AJAX.
     Can efficiently display 100k+ points using Canvas renderer.
     All map configuration is defined in Python (settings.py) and passed to template.
     """

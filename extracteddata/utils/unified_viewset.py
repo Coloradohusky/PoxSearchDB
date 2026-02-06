@@ -11,7 +11,8 @@ from extracteddata.serializers import AutoFlattenSerializer
 
 
 def _build_search_query(search_value, model, max_depth=2):
-    """Build a search query that searches across all text fields in a model.
+    """
+    Build a search query that searches across all text fields in a model.
     Note: max_depth is 2 to match _get_filterable_fields for consistency.
     """
 
@@ -88,7 +89,8 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
     }
 
     def _get_filterable_fields(self, model, max_depth=2):
-        """Automatically detect filterable fields from a model.
+        """
+        Automatically detect filterable fields from a model.
         Returns a list of field definitions with metadata for UI generation.
         """
         from django.db import models as django_models
