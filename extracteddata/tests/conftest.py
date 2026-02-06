@@ -1,5 +1,4 @@
-"""
-Pytest configuration for extracteddata tests.
+"""Pytest configuration for extracteddata tests.
 
 This module configures the test environment to ensure pygbif caching
 is disabled during tests, allowing VCR to properly intercept and record
@@ -7,6 +6,7 @@ HTTP requests.
 """
 
 import os
+
 import pytest
 
 

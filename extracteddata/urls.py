@@ -1,8 +1,9 @@
-from django.urls import path, include
 from django.contrib.auth import views as auth_views
-from .utils.unified_viewset import UnifiedViewSet
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+
 from . import views
+from .utils.unified_viewset import UnifiedViewSet
 
 router = DefaultRouter()
 router.register(r"fulltext", views.FullTextViewSet)

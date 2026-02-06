@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import FullText, Descriptive, Host, Pathogen, Sequence
+from .models import Descriptive, FullText, Host, Pathogen, Sequence
 
 
 class FullTextSerializer(serializers.ModelSerializer):
@@ -44,8 +44,7 @@ class SequenceSerializer(serializers.ModelSerializer):
 
 
 class AutoFlattenSerializer(serializers.Serializer):
-    """
-    Dynamically flattens any Django model instance into a flat dictionary.
+    """Dynamically flattens any Django model instance into a flat dictionary.
     Works with any model, not just Pathogen.
     """
 

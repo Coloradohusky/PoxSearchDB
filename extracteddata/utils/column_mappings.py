@@ -1,4 +1,4 @@
-from ..models import FullText, Descriptive, Host, Pathogen, Sequence
+from ..models import Descriptive, FullText, Host, Pathogen, Sequence
 
 MODEL_MAP = {
     "inclusion_full_text": FullText,

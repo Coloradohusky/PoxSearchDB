@@ -1,14 +1,16 @@
-from datetime import datetime
-import pandas as pd
-import re
+import logging
 import os
+import re
+from datetime import datetime
+
+import pandas as pd
+import pygbif
 from django.db import transaction
+from pygbif import species as _gbif_species
+
+from ..models import Descriptive, FullText, Host, Pathogen, Sequence
 from .column_mappings import COLUMN_ALIASES, MODEL_ALIASES, get_model_for_sheet
 from .logging import log_message
-from ..models import FullText, Descriptive, Host, Pathogen, Sequence
-import pygbif
-from pygbif import species as _gbif_species
-import logging
 
 
 def log(verbose, msg):
@@ -78,6 +80,7 @@ def resolve_species_name(name, verbose, min_confidence=85):
 
     Note:
         This function requires the `pygbif` package and network access to GBIF.
+
     """
     if not name or not isinstance(name, str):
         return None
@@ -114,7 +117,8 @@ def resolve_species_name(name, verbose, min_confidence=85):
                                 )
                                 if canonical:
                                     return canonical
-                        except Exception:
+                        except Exception as e:
+                            print(log(verbose, f"Error: {e}"))
                             pass
 
                 # Return canonical name from backbone response
@@ -159,14 +163,15 @@ def apply_column_aliases(df, aliases):
     df.columns = df.columns.str.strip().str.lower()
 
 
-def make_row_key(row, fields, float_to_int=True):
+def make_row_key(row, fields, verbose, float_to_int=True):
     def _normalize_latlon(val):
         if val is None:
             return None
         try:
             if pd.isna(val):
                 return None
-        except Exception:
+        except Exception as e:
+            print(log(verbose, f"Error: {e}"))
             pass
         if isinstance(val, (int, float)):
             return str(float(val)).strip()
@@ -277,11 +282,12 @@ def import_data(
     existing_data = list(model_class.objects.values(*fetch_fields))
 
     existing_keys = {
-        make_row_key(obj, dedup_fields, float_to_int=True) for obj in existing_data
+        make_row_key(obj, dedup_fields, verbose, float_to_int=True)
+        for obj in existing_data
     }
 
     key_to_id = {
-        make_row_key(obj, dedup_fields, float_to_int=True): obj["id"]
+        make_row_key(obj, dedup_fields, verbose, float_to_int=True): obj["id"]
         for obj in existing_data
     }
 
@@ -382,7 +388,7 @@ def import_data(
                 else:
                     key_source[f] = row.get(f)
 
-        key = make_row_key(key_source, dedup_fields)
+        key = make_row_key(key_source, dedup_fields, verbose)
 
         # Handle duplicates
         if key in existing_keys:
@@ -781,7 +787,8 @@ def import_sequence(df, id_mapping, verbose):
                 date_part = v.split()[0]
                 dt = datetime.fromisoformat(date_part)
                 return dt.strftime("%Y-%m-%d")
-        except Exception:
+        except Exception as e:
+            print(log(verbose, f"Error: {e}"))
             pass
 
         # Try common alternative formats
@@ -789,7 +796,8 @@ def import_sequence(df, id_mapping, verbose):
             try:
                 dt = datetime.strptime(v, fmt)
                 return dt.strftime("%Y-%m-%d")
-            except Exception:
+            except Exception as e:
+                print(log(verbose, f"Error: {e}"))
                 continue
 
         # Give up gracefully

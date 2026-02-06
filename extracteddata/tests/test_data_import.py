@@ -3,13 +3,15 @@ import os
 # Set TESTING environment variable BEFORE importing data_import to disable pygbif caching
 os.environ["TESTING"] = "True"
 
-from django.test import SimpleTestCase
 import unittest.mock as mock
 from types import SimpleNamespace
+
 import pandas as pd
 import vcr
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
+
 from extracteddata.utils import data_import as di
+
 from .. import models
 
 # Configure VCR with sensible defaults
@@ -59,8 +61,8 @@ class DataImportUtilsTests(SimpleTestCase):
 
         # Test make_row_key with lat normalization
         row = {"location_latitude": " 45.0 ", "title": " A "}
-        key = di.make_row_key(row, ["location_latitude", "title"])
-        self.assertEqual(key[0], str(float(45.0)))
+        key = di.make_row_key(row, ["location_latitude", "title"], False)
+        self.assertEqual(key[0], str(45.0))
 
 
 class DataImportModelLinkageTests(TestCase):
@@ -232,8 +234,7 @@ class SequenceModelTests(SimpleTestCase):
 
 
 class ExcelImportTests(TestCase):
-    """
-    Integration test: build an in-memory Excel file with one row each
+    """Integration test: build an in-memory Excel file with one row each
     for FullText, Descriptive, Host, and Pathogen, then run the
     Excel handler to import them and verify DB objects and id_mapping.
     Also tests duplicate import handling.

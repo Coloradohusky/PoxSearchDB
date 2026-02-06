@@ -1,5 +1,6 @@
 from django.contrib.gis import admin
-from .models import FullText, Descriptive, Host, Pathogen, Sequence
+
+from .models import Descriptive, FullText, Host, Pathogen, Sequence
 
 admin.site.register(FullText)
 admin.site.register(Descriptive)

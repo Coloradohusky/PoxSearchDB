@@ -1,38 +1,35 @@
-from rest_framework import viewsets, filters
+import json
+import sys
+
+import folium
+import xyzservices.providers as xyz
+from django.conf import settings
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
+from django.core.cache import cache
+from django.db.models import CharField, Q, TextField
+from django.http import HttpResponseForbidden, JsonResponse, StreamingHttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from folium.plugins import HeatMap
+from rest_framework import filters, viewsets
+
 from .forms import DataUploadForm
-from django.http import StreamingHttpResponse
+from .models import Descriptive, FullText, Host, Pathogen, Sequence
 from .serializers import (
-    FullTextSerializer,
     DescriptiveSerializer,
+    FullTextSerializer,
     HostSerializer,
     PathogenSerializer,
     SequenceSerializer,
 )
+from .utils.column_mappings import MODEL_MAP
 from .utils.data_import import handle_csv_upload, handle_excel_upload
 from .utils.logging import log_message
-from django.shortcuts import render, redirect
-from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth import login
-from django.http import JsonResponse
-from .models import Pathogen, Sequence, FullText, Descriptive, Host
-from django.shortcuts import get_object_or_404
-from .utils.column_mappings import MODEL_MAP
-from django.db.models import Q, CharField, TextField
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseForbidden
-import sys
-from django.core.cache import cache
-import folium
-from folium.plugins import HeatMap
-import json
-from django.conf import settings
-import xyzservices.providers as xyz
 
 
 def _build_tiles_from_config():
-    """
-    Build tile layers from xyzservices providers defined in settings.
-    """
+    """Build tile layers from xyzservices providers defined in settings."""
     config = getattr(settings, "LEAFLET_CONFIG", {})
     provider_names = config.get("TILE_PROVIDERS", {})
 
@@ -59,8 +56,7 @@ def _build_tiles_from_config():
 
 
 def get_map_config():
-    """
-    Returns map configuration from Django settings.
+    """Returns map configuration from Django settings.
     This centralizes all map settings in Python instead of hardcoding in HTML/JS.
     """
     config = getattr(settings, "LEAFLET_CONFIG", {})
@@ -222,7 +218,7 @@ def upload_data(request):
                         msg = log_message("Processing CSV files...\n", verbose)
                         if msg:
                             yield msg
-                        for field_name, model_class in MODEL_MAP.items():
+                        for field_name, _ in MODEL_MAP.items():
                             file = form.cleaned_data.get(field_name)
                             if file:
                                 # Check permission for this specific model before processing
@@ -273,13 +269,12 @@ def upload_data(request):
         else:
             # Form has validation errors - return them as plain text for the streaming response
             error_messages = []
-            for field, errors in form.errors.items():
+            for _, errors in form.errors.items():
                 for error in errors:
                     error_messages.append(f"Error: {error}\n")
 
             def stream_errors():
-                for error in error_messages:
-                    yield error
+                yield from error_messages
 
             return StreamingHttpResponse(stream_errors(), content_type="text/plain")
 
@@ -348,8 +343,7 @@ def sequence_detail(request, pk):
 
 
 def _build_search_query(search_value, model, max_depth=2):
-    """
-    Build a search query that searches across all text fields in a model.
+    """Build a search query that searches across all text fields in a model.
     Note: max_depth is 2 to match _get_filterable_fields for consistency.
     """
 
@@ -398,8 +392,7 @@ def _build_search_query(search_value, model, max_depth=2):
 
 # API endpoint to return GeoJSON data for all hosts
 def host_geojson_api(request):
-    """
-    Returns GeoJSON of all host locations for client-side rendering.
+    """Returns GeoJSON of all host locations for client-side rendering.
     Can handle 100k+ records efficiently.
     """
     # Check cache first (cache for 1 hour)
@@ -458,8 +451,7 @@ def host_geojson_api(request):
 
 # Map view - renders client-side Leaflet map
 def map(request):
-    """
-    Renders a Leaflet map that loads GeoJSON via AJAX.
+    """Renders a Leaflet map that loads GeoJSON via AJAX.
     Can efficiently display 100k+ points using Canvas renderer.
     All map configuration is defined in Python (settings.py) and passed to template.
     """

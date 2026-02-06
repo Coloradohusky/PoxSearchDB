@@ -1,16 +1,17 @@
-from extracteddata.models import Descriptive, FullText, Host, Pathogen, Sequence
-from extracteddata.serializers import AutoFlattenSerializer
-from rest_framework import filters, viewsets
-from rest_framework.decorators import action
-from django.http import JsonResponse, StreamingHttpResponse
-from django.db.models import Q, CharField, TextField
 import csv
 import sys
 
+from django.db.models import CharField, Q, TextField
+from django.http import JsonResponse, StreamingHttpResponse
+from rest_framework import filters, viewsets
+from rest_framework.decorators import action
+
+from extracteddata.models import Descriptive, FullText, Host, Pathogen, Sequence
+from extracteddata.serializers import AutoFlattenSerializer
+
 
 def _build_search_query(search_value, model, max_depth=2):
-    """
-    Build a search query that searches across all text fields in a model.
+    """Build a search query that searches across all text fields in a model.
     Note: max_depth is 2 to match _get_filterable_fields for consistency.
     """
 
@@ -87,8 +88,7 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
     }
 
     def _get_filterable_fields(self, model, max_depth=2):
-        """
-        Automatically detect filterable fields from a model.
+        """Automatically detect filterable fields from a model.
         Returns a list of field definitions with metadata for UI generation.
         """
         from django.db import models as django_models
@@ -183,9 +183,7 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
         return fields
 
     def _apply_filter(self, queryset, field_config, value):
-        """
-        Apply a filter to the queryset based on field configuration.
-        """
+        """Apply a filter to the queryset based on field configuration."""
         field_name = field_config["name"]
         filter_type = field_config["filter_type"]
 
