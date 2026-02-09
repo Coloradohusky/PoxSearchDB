@@ -1,10 +1,12 @@
 # forms.py
 from django import forms
+from django.core.validators import FileExtensionValidator
 
 
 class DataUploadForm(forms.Form):
     file_type = forms.ChoiceField(
-        choices=[("csv", "CSV"), ("excel", "Excel")], widget=forms.RadioSelect
+        choices=[("excel", "Excel (recommended)"), ("csv", "CSV")],
+        widget=forms.RadioSelect,
     )
 
     log_verbose = forms.BooleanField(
@@ -19,7 +21,10 @@ class DataUploadForm(forms.Form):
     sequences = forms.FileField(required=False, label="Sequences CSV")
 
     # Excel option - one file containing all sheets
-    excel_file = forms.FileField(required=False, label="Excel File")
+    excel_file = forms.FileField(
+        required=False,
+        label="Excel File",
+    )
 
     def clean(self):
         cleaned_data = super().clean()
