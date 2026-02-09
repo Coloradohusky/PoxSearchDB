@@ -1,10 +1,10 @@
-# forms.py
 from django import forms
 
 
 class DataUploadForm(forms.Form):
     file_type = forms.ChoiceField(
-        choices=[("csv", "CSV"), ("excel", "Excel")], widget=forms.RadioSelect
+        choices=[("excel", "Excel (recommended)"), ("csv", "CSV")],
+        widget=forms.RadioSelect,
     )
 
     log_verbose = forms.BooleanField(
@@ -12,14 +12,42 @@ class DataUploadForm(forms.Form):
     )
 
     # CSV fields - one for each model
-    inclusion_full_text = forms.FileField(required=False, label="FullText CSV")
-    descriptive = forms.FileField(required=False, label="Descriptive CSV")
-    host = forms.FileField(required=False, label="Host CSV")
-    pathogen = forms.FileField(required=False, label="Pathogen CSV")
-    sequences = forms.FileField(required=False, label="Sequences CSV")
+    inclusion_full_text = forms.FileField(
+        required=False,
+        label="FullText CSV",
+        widget=forms.ClearableFileInput(attrs={"accept": ".csv,text/csv"}),
+    )
+    descriptive = forms.FileField(
+        required=False,
+        label="Descriptive CSV",
+        widget=forms.ClearableFileInput(attrs={"accept": ".csv,text/csv"}),
+    )
+    host = forms.FileField(
+        required=False,
+        label="Host CSV",
+        widget=forms.ClearableFileInput(attrs={"accept": ".csv,text/csv"}),
+    )
+    pathogen = forms.FileField(
+        required=False,
+        label="Pathogen CSV",
+        widget=forms.ClearableFileInput(attrs={"accept": ".csv,text/csv"}),
+    )
+    sequences = forms.FileField(
+        required=False,
+        label="Sequences CSV",
+        widget=forms.ClearableFileInput(attrs={"accept": ".csv,text/csv"}),
+    )
 
     # Excel option - one file containing all sheets
-    excel_file = forms.FileField(required=False, label="Excel File")
+    excel_file = forms.FileField(
+        required=False,
+        label="Excel File",
+        widget=forms.ClearableFileInput(
+            attrs={
+                "accept": ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            }
+        ),
+    )
 
     def clean(self):
         cleaned_data = super().clean()
