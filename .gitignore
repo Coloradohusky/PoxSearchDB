@@ -208,3 +208,4 @@ __marimo__/
 /.idea
 /extracteddata/migrations
 extracteddata/tests/.~lock.test.xlsx\#
+/.vscode

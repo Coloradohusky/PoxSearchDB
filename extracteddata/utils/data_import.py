@@ -49,6 +49,7 @@ def normalize_value(value, float_to_int=True):
     return str(value).strip()
 
 
+# Assign a unique integer ID, ensuring no conflicts with existing_ids.
 def assign_unique_id(existing_ids, candidate_id=None, start_from=1):
     if candidate_id is None or candidate_id in existing_ids:
         candidate_id = start_from

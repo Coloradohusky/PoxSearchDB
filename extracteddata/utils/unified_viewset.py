@@ -1,3 +1,4 @@
+"""Creates a unified API endpoint for all models with dynamic filtering, searching, and exporting capabilities."""
 import csv
 import sys
 
@@ -10,13 +11,10 @@ from extracteddata.models import Descriptive, FullText, Host, Pathogen, Sequence
 from extracteddata.serializers import AutoFlattenSerializer
 
 
-def _build_search_query(search_value, model, max_depth=2):
-    """
-    Build a search query that searches across all text fields in a model.
-    Note: max_depth is 2 to match _get_filterable_fields for consistency.
-    """
+def _build_search_query(search_value, model, max_depth=2) -> Q:
+    """Build a search query that searches across all text fields in a model."""
 
-    def get_searchable_fields(model, prefix="", depth=0):
+    def get_searchable_fields(model, prefix="", depth=0) -> list[str]:
         if depth > max_depth:
             return []
 
@@ -60,6 +58,8 @@ def _build_search_query(search_value, model, max_depth=2):
 
 
 class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet that provides a unified endpoint for all models with dynamic filtering and searching."""
+    
     serializer_class = AutoFlattenSerializer
     filter_backends = [filters.OrderingFilter]
     ordering_fields = "__all__"
@@ -88,9 +88,10 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
         },
     }
 
-    def _get_filterable_fields(self, model, max_depth=2):
+    def _get_filterable_fields(self, model, max_depth=2) -> list[dict]:
         """
         Automatically detect filterable fields from a model.
+        
         Returns a list of field definitions with metadata for UI generation.
         """
         from django.db import models as django_models
@@ -202,6 +203,7 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
     def get_queryset(self):
+        """Get the queryset based on the selected model and applied filters."""
         params = self.request.query_params
 
         # Get the selected model (default to pathogen for backwards compatibility)
@@ -321,8 +323,8 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
     @action(detail=False, methods=["get"])
-    def columns(self, request):
-        """Return available columns from the serializer"""
+    def columns(self, request) -> JsonResponse:
+        """Return available columns from the serializer."""
         sample_obj = self.get_queryset().first()
         if not sample_obj:
             return JsonResponse({"columns": []})
@@ -335,8 +337,8 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
         return JsonResponse({"columns": columns})
 
     @action(detail=False, methods=["get"])
-    def models(self, request):
-        """Return available model types for filtering"""
+    def models(self, request) -> JsonResponse:
+        """Return available model types for filtering."""
         models = [
             {"value": key, "label": key.replace("_", " ").title()}
             for key in self.MODEL_CONFIG.keys()
@@ -344,8 +346,8 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
         return JsonResponse({"models": models})
 
     @action(detail=False, methods=["get"])
-    def filters(self, request):
-        """Return available filters for the selected model"""
+    def filters(self, request) -> JsonResponse:
+        """Return available filters for the selected model."""
         model_name = request.query_params.get("model", "pathogen").lower()
         config = self.MODEL_CONFIG.get(model_name, self.MODEL_CONFIG["pathogen"])
         model_class = config["model"]
@@ -354,7 +356,8 @@ class UnifiedViewSet(viewsets.ReadOnlyModelViewSet):
         return JsonResponse({"filters": filterable_fields})
 
     @action(detail=False, methods=["get"])
-    def export(self, request):
+    def export(self, request) -> StreamingHttpResponse:
+        """Export the current queryset to CSV, with optional column selection."""
         queryset = self.filter_queryset(self.get_queryset())
 
         # Get requested columns from query params

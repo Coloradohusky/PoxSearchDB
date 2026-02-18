@@ -1,3 +1,4 @@
+"""Views for the extracteddata app, including API endpoints and data upload handling."""
 import json
 import sys
 
@@ -8,7 +9,6 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.core.cache import cache
-from django.db.models import CharField, Q, TextField
 from django.http import HttpResponseForbidden, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from folium.plugins import HeatMap
@@ -57,7 +57,8 @@ def _build_tiles_from_config():
 
 def get_map_config():
     """
-    Returns map configuration from Django settings.
+    Return map configuration from Django settings.
+    
     This centralizes all map settings in Python instead of hardcoding in HTML/JS.
     """
     config = getattr(settings, "LEAFLET_CONFIG", {})
@@ -73,6 +74,8 @@ def get_map_config():
 
 
 class FullTextViewSet(viewsets.ModelViewSet):
+    """ViewSet for FullText model with search and ordering capabilities."""
+    
     queryset = FullText.objects.all()
     serializer_class = FullTextSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -81,6 +84,8 @@ class FullTextViewSet(viewsets.ModelViewSet):
 
 
 class DescriptiveViewSet(viewsets.ModelViewSet):
+    """ViewSet for Descriptive model with search and ordering capabilities."""
+    
     queryset = Descriptive.objects.all()
     serializer_class = DescriptiveSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -89,6 +94,8 @@ class DescriptiveViewSet(viewsets.ModelViewSet):
 
 
 class HostViewSet(viewsets.ModelViewSet):
+    """ViewSet for Host model with search and ordering capabilities."""
+    
     queryset = Host.objects.all()
     serializer_class = HostSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -97,6 +104,8 @@ class HostViewSet(viewsets.ModelViewSet):
 
 
 class PathogenViewSet(viewsets.ModelViewSet):
+    """ViewSet for Pathogen model with search and ordering capabilities."""
+    
     queryset = Pathogen.objects.all()
     serializer_class = PathogenSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -105,6 +114,8 @@ class PathogenViewSet(viewsets.ModelViewSet):
 
 
 class SequenceViewSet(viewsets.ModelViewSet):
+    """ViewSet for Sequence model with search and ordering capabilities."""
+    
     queryset = Sequence.objects.all()
     serializer_class = SequenceSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -113,6 +124,7 @@ class SequenceViewSet(viewsets.ModelViewSet):
 
 
 def index(request):
+    """Render the home page with summary counts and a heatmap of host locations."""
     # Provide counts for the front-page feature cards
     descriptive_count = Descriptive.objects.count()
     host_count = Host.objects.count()
@@ -180,11 +192,13 @@ def index(request):
 
 
 def search_view(request):
+    """Render search page with client-side search functionality."""
     return render(request, "search.html")
 
 
 @login_required
 def upload_data(request):
+    """Render upload form and handle data uploads with streaming response for progress updates."""
     # Permission map for each upload field -> required add permission
     perm_map = {
         "inclusion_full_text": "extracteddata.add_fulltext",
@@ -286,6 +300,7 @@ def upload_data(request):
 
 
 def register(request):
+    """Render user registration form and handle new user creation."""
     if request.method == "POST":
         form = UserCreationForm(request.POST)
         if form.is_valid():
@@ -298,6 +313,7 @@ def register(request):
 
 
 def fulltext_detail(request, pk):
+    """Render full text detail page with related descriptive records."""
     fulltext = get_object_or_404(FullText, pk=pk)
     # include related descriptives via related_name 'descriptive_records'
     descriptives = fulltext.descriptive_records.all()
@@ -309,6 +325,7 @@ def fulltext_detail(request, pk):
 
 
 def descriptive_detail(request, pk):
+    """Render descriptive detail page with related hosts and sequences."""
     descriptive = get_object_or_404(Descriptive, pk=pk)
     hosts = descriptive.rodents.all()
     sequences = descriptive.sequences.all()
@@ -320,6 +337,7 @@ def descriptive_detail(request, pk):
 
 
 def host_detail(request, pk):
+    """Render host detail page with related pathogens and sequences."""
     host = get_object_or_404(Host, pk=pk)
     pathogens = host.pathogens.all()
     sequences = host.sequences.all()
@@ -331,6 +349,7 @@ def host_detail(request, pk):
 
 
 def pathogen_detail(request, pk):
+    """Render pathogen detail page with related sequences."""
     pathogen = get_object_or_404(Pathogen, pk=pk)
     sequences = pathogen.sequences.all()
     return render(
@@ -339,65 +358,14 @@ def pathogen_detail(request, pk):
 
 
 def sequence_detail(request, pk):
+    """Render sequence detail page with related host and pathogen info."""
     sequence = get_object_or_404(Sequence, pk=pk)
     return render(request, "sequence_detail.html", {"sequence": sequence})
 
 
-def _build_search_query(search_value, model, max_depth=2):
-    """
-    Build a search query that searches across all text fields in a model.
-    Note: max_depth is 2 to match _get_filterable_fields for consistency.
-    """
-
-    def get_searchable_fields(model, prefix="", depth=0):
-        if depth > max_depth:
-            return []
-
-        fields = []
-        for field in model._meta.get_fields():
-            # Skip reverse relationships and many-to-many
-            if field.one_to_many or field.many_to_many:
-                continue
-
-            field_name = f"{prefix}{field.name}"
-
-            # Add text fields
-            if isinstance(field, (CharField, TextField)):
-                fields.append(field_name)
-
-            # Follow foreign keys
-            elif hasattr(field, "related_model") and field.related_model:
-                try:
-                    related_fields = get_searchable_fields(
-                        field.related_model, f"{field_name}__", depth + 1
-                    )
-                    fields.extend(related_fields)
-                except Exception as e:
-                    # Skip if there's an issue with the related model
-                    print(
-                        f"Could not traverse related field {field_name}: {e}",
-                        file=sys.stderr,
-                    )
-
-        return fields
-
-    # Get all searchable fields for the given model
-    searchable_fields = get_searchable_fields(model)
-
-    # Build Q objects
-    q_objects = Q()
-    for field_name in searchable_fields:
-        q_objects |= Q(**{f"{field_name}__icontains": search_value})
-
-    return q_objects
-
-
 # API endpoint to return GeoJSON data for all hosts
 def host_geojson_api(request):
-    """
-    Returns GeoJSON of all host locations for client-side rendering.
-    Can handle 100k+ records efficiently.
-    """
+    """Return a GeoJSON of all host locations for client-side rendering."""
     # Check cache first (cache for 1 hour)
     cache_key = "host_geojson_data"
     geojson_data = cache.get(cache_key)
@@ -455,7 +423,8 @@ def host_geojson_api(request):
 # Map view - renders client-side Leaflet map
 def map(request):
     """
-    Renders a Leaflet map that loads GeoJSON via AJAX.
+    Render a Leaflet map that loads GeoJSON via AJAX.
+    
     Can efficiently display 100k+ points using Canvas renderer.
     All map configuration is defined in Python (settings.py) and passed to template.
     """
