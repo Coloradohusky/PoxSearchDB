@@ -11,6 +11,7 @@ import vcr
 from django.test import SimpleTestCase, TestCase
 
 from extracteddata.utils import data_import as di
+from extracteddata.utils import gbif_normalization as gn
 
 from .. import models
 
@@ -127,10 +128,10 @@ class DataImportModelLinkageTests(TestCase):
             },
         )
 
-        with mock.patch.object(di, "_gbif_species", fake_species):
+        with mock.patch.object(gn, "_gbif_species", fake_species):
             # Sanity-check species resolver on the incoming value before import
             self.assertEqual(
-                di.resolve_species_name(host_df.loc[0, "scientific_name"], True),
+                gn.resolve_species_name(host_df.loc[0, "scientific_name"], True),
                 "NewRat",
             )
 
@@ -189,40 +190,40 @@ class SpeciesNormalizationTests(TestCase):
     @my_vcr.use_cassette("gbif_na_tokens.yaml")
     def test_na_tokens_return_none(self):
         """Test GBIF resolution for NA tokens"""
-        self.assertIsNone(di.resolve_species_name("na", True))
-        self.assertIsNone(di.resolve_species_name("N/A", True))
-        self.assertIsNone(di.resolve_species_name("unknown", True))
+        self.assertIsNone(gn.resolve_species_name("na", True))
+        self.assertIsNone(gn.resolve_species_name("N/A", True))
+        self.assertIsNone(gn.resolve_species_name("unknown", True))
 
     @my_vcr.use_cassette("gbif_sp_spp_normalization.yaml")
     def test_sp_and_spp_normalization(self):
         """Test GBIF resolution for sp and spp normalization"""
-        self.assertEqual(di.resolve_species_name("Rattus sp", True), "Rattus")
-        self.assertEqual(di.resolve_species_name("Rattus spp", True), "Rattus")
+        self.assertEqual(gn.resolve_species_name("Rattus sp", True), "Rattus")
+        self.assertEqual(gn.resolve_species_name("Rattus spp", True), "Rattus")
 
     @my_vcr.use_cassette("gbif_homo_sapiens.yaml")
     def test_taxonomic_resolution_with_gbif(self):
         """Test GBIF resolution for Homo sapiens"""
-        result = di.resolve_species_name("Homo sapiens", True)
+        result = gn.resolve_species_name("Homo sapiens", True)
         self.assertIsNotNone(result)
         self.assertIn("sapiens", result.lower())
 
     @my_vcr.use_cassette("gbif_oligoryzomys_utiaritensis.yaml")
     def test_gbif_resolution_oligoryzomys(self):
         """Test GBIF resolution for Oligoryzomys utiaritensis"""
-        result = di.resolve_species_name("Olygoryzomys utiaritensis", True)
+        result = gn.resolve_species_name("Olygoryzomys utiaritensis", True)
         self.assertEqual(result, "Oligoryzomys utiaritensis")
 
     @my_vcr.use_cassette("gbif_synonym_resolution.yaml")
     def test_gbif_synonym_resolution(self):
         """Test that synonyms are resolved to accepted names"""
         # Use a known synonym if you have one
-        result = di.resolve_species_name("Mus musculus domesticus", True)
+        result = gn.resolve_species_name("Mus musculus domesticus", True)
         self.assertIsNotNone(result)
 
     @my_vcr.use_cassette("gbif_low_confidence.yaml")
     def test_gbif_low_confidence_fallback(self):
         """Test fallback when GBIF confidence is too low"""
-        result = di.resolve_species_name("SomeFakeSpecies xyz123", True)
+        result = gn.resolve_species_name("SomeFakeSpecies xyz123", True)
         # Should fall back to normalized input
         self.assertIsNotNone(result)
 

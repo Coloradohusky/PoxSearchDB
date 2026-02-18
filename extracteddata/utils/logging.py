@@ -9,3 +9,10 @@ def log_message(message: str, verbose: bool) -> str | None:
         return None
     else:
         return f"[{timestamp}] {message}"
+
+
+# Allows for live output through the web interface
+def log(verbose, msg):
+    m = log_message(msg, verbose)
+    if m:
+        yield m
